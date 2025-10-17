@@ -1,4 +1,5 @@
-const API_BASE = "https://clipper-api-final.onrender.com";
+const API_URL = "https://clipper-api-final-1.onrender.com/clip";
+
 
 
 async function startTranscription() {
@@ -34,3 +35,4 @@ async function startTranscription() {
     console.error(err);
   }
 }
+
