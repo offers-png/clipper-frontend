@@ -1,0 +1,6 @@
+body { background:#111; color:#fff; font-family:Arial; display:flex; align-items:center; justify-content:center; height:100vh; }
+.container { text-align:center; background:#1c1c1c; padding:40px; border-radius:20px; box-shadow:0 0 20px #000; width:400px; }
+input, button { width:100%; margin:10px 0; padding:10px; border:none; border-radius:8px; font-size:16px; }
+button { background:#007bff; color:#fff; cursor:pointer; }
+button.active { background:#0056b3; }
+.hidden { display:none; }
