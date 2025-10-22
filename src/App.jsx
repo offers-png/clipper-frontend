@@ -1,50 +1,64 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 
 function App() {
   const API_BASE = import.meta.env.VITE_API_BASE || "https://clipper-api-final-1.onrender.com";
 
   const [file, setFile] = useState(null);
-  const [start, setStart] = useState("");
-  const [end, setEnd] = useState("");
-  const [output, setOutput] = useState(null);
-  const [transcript, setTranscript] = useState("");
+  const [sections, setSections] = useState([{ start: "", end: "" }]);
   const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState("clip"); // 'clip' or 'transcribe'
+  const [outputUrl, setOutputUrl] = useState(null);
+  const abortController = useRef(null);
 
-  const handleUpload = async () => {
-    if (!file) return alert("Please choose a file first.");
+  const addSection = () => {
+    if (sections.length >= 5) return alert("Maximum 5 sections allowed");
+    setSections([...sections, { start: "", end: "" }]);
+  };
+
+  const removeSection = (index) => {
+    const updated = sections.filter((_, i) => i !== index);
+    setSections(updated);
+  };
+
+  const updateSection = (index, field, value) => {
+    const updated = [...sections];
+    updated[index][field] = value;
+    setSections(updated);
+  };
+
+  const cancelAll = () => {
+    if (abortController.current) {
+      abortController.current.abort();
+      alert("⛔ Clipping canceled.");
+      setLoading(false);
+    }
+  };
+
+  const handleClipAll = async () => {
+    if (!file) return alert("Please select a file first!");
+    if (sections.some(s => !s.start || !s.end)) return alert("All sections need start and end times.");
+
     setLoading(true);
-    setOutput(null);
-    setTranscript("");
+    setOutputUrl(null);
+    abortController.current = new AbortController();
 
     try {
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("sections", JSON.stringify(sections));
 
-      let endpoint = "";
-      if (mode === "clip") {
-        if (!start || !end) return alert("Enter start and end times (e.g. 00:00:05 and 00:00:10)");
-        formData.append("start", start);
-        formData.append("end", end);
-        endpoint = "/clip";
-      } else {
-        endpoint = "/transcribe";
-      }
-
-      const res = await fetch(`${API_BASE}${endpoint}`, { method: "POST", body: formData });
+      const res = await fetch(`${API_BASE}/clip_multi`, {
+        method: "POST",
+        body: formData,
+        signal: abortController.current.signal
+      });
 
       if (!res.ok) throw new Error("Server error");
-      if (mode === "clip") {
-        // download trimmed video
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        setOutput(url);
-      } else {
-        const data = await res.json();
-        setTranscript(data.text || "(No text detected)");
-      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      setOutputUrl(url);
     } catch (err) {
-      alert("Error: " + err.message);
+      if (err.name !== "AbortError") alert("❌ Error: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -52,68 +66,74 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-8 text-gray-800">
-      <h1 className="text-4xl font-bold mb-6">🎬 PTSEL Clipper AI</h1>
+      <h1 className="text-4xl font-bold mb-6">🎬 PTSEL Multi-Clip Studio</h1>
 
-      <div className="bg-white shadow-lg rounded-2xl p-6 w-full max-w-xl space-y-4">
-        <div className="flex space-x-2 justify-center">
-          <button
-            className={`px-4 py-2 rounded-lg ${mode === "clip" ? "bg-blue-600 text-white" : "bg-gray-200"}`}
-            onClick={() => setMode("clip")}
-          >
-            ✂️ Clip Video
-          </button>
-          <button
-            className={`px-4 py-2 rounded-lg ${mode === "transcribe" ? "bg-green-600 text-white" : "bg-gray-200"}`}
-            onClick={() => setMode("transcribe")}
-          >
-            🎙️ Transcribe Audio
-          </button>
-        </div>
-
+      <div className="bg-white shadow-xl rounded-2xl p-6 w-full max-w-2xl space-y-4">
         <input
           type="file"
-          accept="video/*,audio/*"
+          accept="video/*"
           onChange={(e) => setFile(e.target.files[0])}
           className="block w-full p-2 border rounded"
         />
 
-        {mode === "clip" && (
-          <div className="flex space-x-2">
+        {sections.map((section, i) => (
+          <div key={i} className="flex items-center space-x-2">
             <input
               placeholder="Start (00:00:05)"
-              value={start}
-              onChange={(e) => setStart(e.target.value)}
+              value={section.start}
+              onChange={(e) => updateSection(i, "start", e.target.value)}
               className="flex-1 p-2 border rounded"
             />
             <input
               placeholder="End (00:00:10)"
-              value={end}
-              onChange={(e) => setEnd(e.target.value)}
+              value={section.end}
+              onChange={(e) => updateSection(i, "end", e.target.value)}
               className="flex-1 p-2 border rounded"
             />
+            <button
+              className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600"
+              onClick={() => removeSection(i)}
+            >
+              ❌
+            </button>
           </div>
-        )}
+        ))}
 
-        <button
-          onClick={handleUpload}
-          disabled={loading}
-          className="w-full py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
-        >
-          {loading ? "Processing..." : mode === "clip" ? "Trim Video" : "Transcribe Audio"}
-        </button>
-
-        {/* --- Output section --- */}
-        {output && (
-          <div className="mt-4">
-            <h2 className="font-semibold mb-2">Trimmed Result 🎞️</h2>
-            <video controls src={output} className="w-full rounded-lg" />
+        <div className="flex justify-between items-center">
+          <button
+            onClick={addSection}
+            className="bg-gray-200 px-4 py-2 rounded hover:bg-gray-300"
+          >
+            ➕ Add Section
+          </button>
+          <div className="space-x-2">
+            <button
+              onClick={handleClipAll}
+              disabled={loading}
+              className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {loading ? "Processing..." : "🎞️ Clip All"}
+            </button>
+            <button
+              onClick={cancelAll}
+              disabled={!loading}
+              className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 disabled:opacity-50"
+            >
+              ❌ Cancel All
+            </button>
           </div>
-        )}
+        </div>
 
-        {transcript && (
-          <div className="mt-4">
-            <h2 className="font-semibold mb-2">Transcription 📝</h2>
-            <pre className="bg-gray-50 p-3 rounded text-sm whitespace-pre-wrap">{transcript}</pre>
+        {outputUrl && (
+          <div className="mt-6">
+            <h2 className="font-semibold mb-2">🎁 Download Your Clips (ZIP)</h2>
+            <a
+              href={outputUrl}
+              download="clips_bundle.zip"
+              className="text-blue-600 underline"
+            >
+              Download ZIP
+            </a>
           </div>
         )}
       </div>
