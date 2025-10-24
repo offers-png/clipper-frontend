@@ -1,8 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Login from "./Login";
-import Clipper from "./Clipper"; // rename your main tool file to Clipper.jsx
-import { useEffect } from "react";
+import Clipper from "./Clipper";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -11,13 +10,26 @@ const supabase = createClient(
 );
 
 export default function App() {
-  const [loggedIn, setLoggedIn] = useState(false);
+  const [session, setSession] = useState(null);
+
+  // ✅ Check login status and listen for changes
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => listener.subscription.unsubscribe();
+  }, []);
 
   return (
     <Router>
       <Routes>
-        {!loggedIn ? (
-          <Route path="/" element={<Login onLogin={() => setLoggedIn(true)} />} />
+        {!session ? (
+          <Route path="/" element={<Login />} />
         ) : (
           <Route path="/" element={<Clipper />} />
         )}
