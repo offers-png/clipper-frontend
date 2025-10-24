@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { createClient } from "@supabase/supabase-js";
-import { supabase } from "./supabaseClient";
+import { supabase } from "./supabaseClient"; // ✅ import shared client
+
 
 const handleLogin = async () => {
   const { data, error } = await supabase.auth.signInWithPassword({
