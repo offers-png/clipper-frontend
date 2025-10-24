@@ -1,5 +1,20 @@
 import React, { useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { supabase } from "./supabaseClient";
+
+const handleLogin = async () => {
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+
+  if (error) {
+    console.error(error);
+    alert(error.message);
+  } else {
+    console.log("Logged in:", data);
+  }
+};
 
 // connect to Supabase
 const supabase = createClient(
