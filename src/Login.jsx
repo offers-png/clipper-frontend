@@ -1,85 +1,57 @@
-import React, { useState } from "react";
-import { supabase } from "./supabaseClient"; // ✅ Import shared Supabase client
+import React, { useState } from "react"
+import { supabase } from "./supabaseClient"
 
-export default function Login({ onLogin }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [message, setMessage] = useState("");
+export default function AuthForm() {
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    const { error } = await supabase.auth.signInWithPassword({
+  const handleSignup = async () => {
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
-    });
-    if (error) setMessage(error.message);
-    else {
-      setMessage("✅ Logged in!");
-      if (onLogin) onLogin(); // move to dashboard
+    })
+
+    if (error) {
+      console.error("Signup error:", error.message)
+      alert(error.message)
+    } else {
+      alert("Signup successful! Check your email to confirm.")
+      console.log("Data:", data)
     }
-  };
+  }
 
-  const handleSignup = async (e) => {
-    e.preventDefault();
-    const { error } = await supabase.auth.signUp({
+  const handleLogin = async () => {
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
-    });
-    if (error) setMessage(error.message);
-    else setMessage("🎉 Check your email to confirm your account!");
-  };
+    })
+
+    if (error) {
+      console.error("Login error:", error.message)
+      alert(error.message)
+    } else {
+      alert("Login successful!")
+      console.log("Data:", data)
+    }
+  }
 
   return (
-    <div style={{ textAlign: "center", marginTop: "100px" }}>
+    <div>
       <h2>Sign In to Clipper Studio</h2>
-      <form style={{ marginTop: "20px" }}>
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          style={{ padding: "10px", width: "280px", marginBottom: "10px" }}
-        />
-        <br />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          style={{ padding: "10px", width: "280px" }}
-        />
-        <br />
-        <button
-          onClick={handleLogin}
-          style={{
-            marginTop: "15px",
-            background: "#6c63ff",
-            color: "white",
-            padding: "10px 25px",
-            borderRadius: "8px",
-            border: "none",
-            cursor: "pointer",
-          }}
-        >
-          Login
-        </button>
-        <button
-          onClick={handleSignup}
-          style={{
-            marginTop: "15px",
-            marginLeft: "10px",
-            background: "#4CAF50",
-            color: "white",
-            padding: "10px 25px",
-            borderRadius: "8px",
-            border: "none",
-            cursor: "pointer",
-          }}
-        >
-          Sign Up
-        </button>
-      </form>
-      <p style={{ marginTop: "15px", color: "gray" }}>{message}</p>
+      <input
+        type="email"
+        placeholder="Email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+      />
+      <input
+        type="password"
+        placeholder="Password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+      />
+      <button onClick={handleLogin}>Login</button>
+      <button onClick={handleSignup}>Sign Up</button>
     </div>
-  );
+  )
 }
