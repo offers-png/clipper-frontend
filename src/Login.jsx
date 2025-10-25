@@ -30,9 +30,10 @@ export default function AuthForm() {
       console.error("Login error:", error.message)
       alert(error.message)
     } else {
-      alert("Login successful!")
-      console.log("Data:", data)
-    }
+  alert("Login successful!");
+  console.log("Data:", data);
+  window.location.href = "/clipper";  // redirect to Clipper page
+}
   }
 
   return (
