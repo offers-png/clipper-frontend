@@ -1,26 +1,5 @@
 import React, { useState } from "react";
-import { supabase } from "./supabaseClient"; // ✅ import shared client
-
-
-const handleLogin = async () => {
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
-
-  if (error) {
-    console.error(error);
-    alert(error.message);
-  } else {
-    console.log("Logged in:", data);
-  }
-};
-
-// connect to Supabase
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
+import { supabase } from "./supabaseClient"; // ✅ Import shared Supabase client
 
 export default function Login({ onLogin }) {
   const [email, setEmail] = useState("");
@@ -36,7 +15,7 @@ export default function Login({ onLogin }) {
     if (error) setMessage(error.message);
     else {
       setMessage("✅ Logged in!");
-      onLogin(); // move to dashboard
+      if (onLogin) onLogin(); // move to dashboard
     }
   };
 
