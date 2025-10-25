@@ -18,20 +18,24 @@ export default function AuthForm({ onLogin }) {
     else alert("✅ Signup successful! Check your email to confirm.");
   };
 
-  const handleLogin = async () => {
-    setLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    setLoading(false);
+ const handleLogin = async () => {
+  setLoading(true);
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+  setLoading(false);
 
-    if (error) {
-      alert(error.message);
-    } else {
-      onLogin?.(data.session);
-    }
-  };
+  if (error) {
+    console.error("Login error:", error.message);
+    alert(error.message);
+  } else if (!data.session) {
+    alert("Please verify your email before logging in.");
+  } else {
+    alert("✅ Login successful!");
+    onLogin?.(data.session);
+  }
+};
 
   return (
     <div style={{ textAlign: "center", marginTop: "80px" }}>
