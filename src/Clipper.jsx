@@ -1,61 +1,39 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { supabase } from "./supabaseClient";
+import Login from "./Login";
+import Clipper from "./Clipper";
 
-export default function AuthForm({ onLogin }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
+export default function App() {
+  const [session, setSession] = useState(undefined); // undefined = loading
 
-  const handleSignup = async () => {
-    setLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
+  useEffect(() => {
+    let isMounted = true;
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (isMounted) setSession(data.session ?? null);
     });
-    setLoading(false);
 
-    if (error) alert(error.message);
-    else alert("✅ Signup successful! Check your email to confirm.");
-  };
-
-  const handleLogin = async () => {
-    setLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
+      if (isMounted) setSession(session ?? null);
     });
-    setLoading(false);
 
-    if (error) {
-      alert(error.message);
-    } else {
-      onLogin?.(data.session);
-    }
-  };
+    return () => {
+      isMounted = false;
+      sub?.subscription?.unsubscribe?.();
+    };
+  }, []);
+
+  if (session === undefined) {
+    return <div style={{ padding: 24 }}>Loading…</div>;
+  }
 
   return (
-    <div style={{ textAlign: "center", marginTop: "80px" }}>
-      <h2>Sign In to Clipper Studio</h2>
-      <input
-        type="email"
-        placeholder="Email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
-      <br />
-      <input
-        type="password"
-        placeholder="Password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
-      <br />
-      <button onClick={handleLogin} disabled={loading}>
-        {loading ? "Loading..." : "Login"}
-      </button>
-      <button onClick={handleSignup} disabled={loading}>
-        Sign Up
-      </button>
-    </div>
+    <Router>
+      <Routes>
+        <Route path="/" element={session ? <Clipper /> : <Login />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Router>
   );
 }
