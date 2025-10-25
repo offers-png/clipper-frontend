@@ -1,39 +1,61 @@
-import React, { useState, useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import Login from "./Login";
-import Clipper from "./Clipper";
-import { createClient } from "@supabase/supabase-js";
+import React, { useState } from "react";
+import { supabase } from "./supabaseClient";
 
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
+export default function AuthForm({ onLogin }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
-export default function App() {
-  const [session, setSession] = useState(null);
-
-  // ✅ Check login status and listen for changes
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
+  const handleSignup = async () => {
+    setLoading(true);
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
     });
+    setLoading(false);
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
+    if (error) alert(error.message);
+    else alert("✅ Signup successful! Check your email to confirm.");
+  };
+
+  const handleLogin = async () => {
+    setLoading(true);
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
     });
+    setLoading(false);
 
-    return () => listener.subscription.unsubscribe();
-  }, []);
+    if (error) {
+      alert(error.message);
+    } else {
+      onLogin?.(data.session);
+    }
+  };
 
   return (
-    <Router>
-      <Routes>
-        {!session ? (
-          <Route path="/" element={<Login />} />
-        ) : (
-          <Route path="/" element={<Clipper />} />
-        )}
-      </Routes>
-    </Router>
+    <div style={{ textAlign: "center", marginTop: "80px" }}>
+      <h2>Sign In to Clipper Studio</h2>
+      <input
+        type="email"
+        placeholder="Email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+      />
+      <br />
+      <input
+        type="password"
+        placeholder="Password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+      />
+      <br />
+      <button onClick={handleLogin} disabled={loading}>
+        {loading ? "Loading..." : "Login"}
+      </button>
+      <button onClick={handleSignup} disabled={loading}>
+        Sign Up
+      </button>
+    </div>
   );
 }
