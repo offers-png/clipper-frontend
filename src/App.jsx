@@ -1,7 +1,8 @@
-import Dashboard from "./Dashboard";
+import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import AuthForm from "./AuthForm";
 import Clipper from "./Clipper";
+import Dashboard from "./Dashboard";
 
 function App() {
   return (
@@ -9,6 +10,7 @@ function App() {
       <Routes>
         <Route path="/" element={<AuthForm />} />
         <Route path="/clipper" element={<Clipper />} />
+        <Route path="/dashboard" element={<Dashboard />} />
       </Routes>
     </Router>
   );
