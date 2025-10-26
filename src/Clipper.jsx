@@ -189,52 +189,79 @@ export default function Clipper() {
           </>
         )}
 
-        {/* Mode: Clip */}
-        {mode === "clip" && (
-          <>
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Start (HH:MM:SS)</label>
-                <input
-                  type="text"
-                  value={start}
-                  onChange={(e) => setStart(e.target.value)}
-                  className="w-full rounded border px-3 py-2"
-                  placeholder="00:00:00"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">End (HH:MM:SS)</label>
-                <input
-                  type="text"
-                  value={end}
-                  onChange={(e) => setEnd(e.target.value)}
-                  className="w-full rounded border px-3 py-2"
-                  placeholder="00:00:10"
-                />
-              </div>
-            </div>
-
-            <button
-              onClick={handleClip}
-              disabled={isBusy}
-              className="w-full bg-blue-600 text-white rounded-lg py-2 disabled:opacity-60"
-            >
-              {isBusy ? "Clipping..." : "Create Clip & Download"}
-            </button>
-
-            {!!clipMsg && <p className="text-green-700 text-sm mt-3">{clipMsg}</p>}
-
-            {/* (Optional) space for multi-clip UI you can add later:
-            <button className="mt-3 text-sm underline" onClick={() => alert('Coming soon: multi-clip UI!')}>
-              + Add multiple sections (ZIP)
-            </button> */}
-          </>
-        )}
-
-        {/* Errors */}
-        {!!error && <p className="text-red-600 text-sm mt-4">{error}</p>}
-      </div>
+        // Mode: Clip
+{mode === "clip" && (
+  <>
+    <div className="mb-3 text-center">
+      <p className="text-sm text-gray-600">
+        Add up to 5 clip segments. Enter start & end times, then clip individually or all at once.
+      </p>
     </div>
-  );
-}
+
+    {clips.map((c, idx) => (
+      <div key={idx} className="border rounded-lg p-3 mb-2 bg-gray-50">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-medium text-sm">🎬 Clip {idx + 1}</h3>
+          <div className="flex gap-2">
+            <button
+              onClick={() => handleClipSingle(idx)}
+              disabled={isBusy}
+              className="text-xs bg-blue-600 text-white px-3 py-1 rounded disabled:opacity-60"
+            >
+              Clip This
+            </button>
+            <button
+              onClick={() => cancelClip(idx)}
+              disabled={isBusy}
+              className="text-xs bg-gray-300 px-2 py-1 rounded hover:bg-gray-400"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <input
+            type="text"
+            value={c.start}
+            onChange={(e) => updateClip(idx, "start", e.target.value)}
+            placeholder="Start (HH:MM:SS)"
+            className="rounded border px-2 py-1 text-sm"
+          />
+          <input
+            type="text"
+            value={c.end}
+            onChange={(e) => updateClip(idx, "end", e.target.value)}
+            placeholder="End (HH:MM:SS)"
+            className="rounded border px-2 py-1 text-sm"
+          />
+        </div>
+      </div>
+    ))}
+
+    <div className="flex justify-between items-center mb-4">
+      <button
+        onClick={addClip}
+        disabled={clips.length >= 5}
+        className="bg-green-600 text-white px-4 py-2 rounded disabled:opacity-50"
+      >
+        + Add Clip
+      </button>
+      <button
+        onClick={cancelAll}
+        className="bg-gray-400 text-white px-3 py-2 rounded"
+      >
+        Cancel All
+      </button>
+    </div>
+
+    <button
+      onClick={handleClipAll}
+      disabled={isBusy || clips.length === 0}
+      className="w-full bg-blue-600 text-white rounded-lg py-2 disabled:opacity-60"
+    >
+      {isBusy ? "Clipping..." : "Clip All & Download ZIP"}
+    </button>
+
+    {!!clipMsg && <p className="text-green-700 text-sm mt-3">{clipMsg}</p>}
+  </>
+)}
