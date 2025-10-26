@@ -35,6 +35,7 @@ export default function Clipper() {
       // Send file to FastAPI backend
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("user_email", user.email);
 
       const response = await fetch(
         "https://clipper-api-final-1.onrender.com/transcribe",
