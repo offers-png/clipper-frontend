@@ -1,75 +1,107 @@
 import React, { useState } from "react";
+import { supabase } from "./supabaseClient";
 
 export default function Clipper() {
   const [file, setFile] = useState(null);
-  const [status, setStatus] = useState("");
-  const [transcription, setTranscription] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [transcript, setTranscript] = useState("");
+  const [user, setUser] = useState(null);
 
-  const handleFileChange = (e) => {
-    setFile(e.target.files[0]);
-    setTranscription("");
-  };
+  // Load Supabase user session
+  React.useEffect(() => {
+    const session = supabase.auth.getSession().then(({ data }) => {
+      setUser(data?.session?.user ?? null);
+    });
 
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUser(session?.user ?? null);
+      }
+    );
+
+    return () => {
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
+  // Upload & Transcribe Function
   const handleUpload = async () => {
-    if (!file) {
-      alert("Please select a file first!");
-      return;
-    }
+    if (!file) return alert("Please choose a file first!");
+    if (!user) return alert("You must log in first.");
 
-    setStatus("⏳ Uploading file to Clipper AI...");
-    const formData = new FormData();
-    formData.append("file", file);
+    setLoading(true);
 
     try {
-      // ✅ your live API endpoint
-      const response = await fetch("https://clipper-api-final-1.onrender.com/transcribe", {
-        method: "POST",
-        body: formData,
-      });
+      // Send file to FastAPI backend
+      const formData = new FormData();
+      formData.append("file", file);
 
-      if (!response.ok) {
-        throw new Error("Transcription failed. Please try again.");
+      const response = await fetch(
+        "https://clipper-api-final-1.onrender.com/transcribe",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Failed to transcribe");
+
+      const transcriptText = result.text || result.transcript || "";
+
+      // ✅ Save to Supabase
+      const { error } = await supabase.from("transcriptions").insert([
+        {
+          user_email: user.email,
+          file_name: file.name,
+          transcript_text: transcriptText,
+          created_at: new Date(),
+        },
+      ]);
+
+      if (error) {
+        console.error("❌ Supabase insert error:", error);
+        alert("Error saving to Supabase.");
+      } else {
+        alert("✅ Transcription saved successfully!");
       }
 
-      const data = await response.json();
-      setTranscription(data.text || "(no text returned)");
-      setStatus("✅ Transcription complete!");
-    } catch (error) {
-      console.error("Error:", error);
-      setStatus("❌ Error during transcription.");
+      setTranscript(transcriptText);
+    } catch (err) {
+      console.error("Error:", err);
+      alert("Error during transcription.");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center p-6">
-      <div className="bg-white shadow-lg rounded-2xl p-8 w-full max-w-md text-center">
-        <h1 className="text-2xl font-bold mb-4 text-gray-800">
-          🎧 PTSEL Clipper Studio
-        </h1>
-        <p className="text-sm text-gray-500 mb-6">
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
+      <div className="bg-white p-8 rounded-2xl shadow-md w-96 text-center">
+        <h1 className="text-2xl font-bold mb-2">🎧 PTSEL Clipper Studio</h1>
+        <p className="text-gray-600 mb-4">
           Upload any audio or video file and let AI transcribe it instantly.
         </p>
 
         <input
           type="file"
           accept="audio/*,video/*"
-          onChange={handleFileChange}
-          className="block w-full text-sm text-gray-700 border border-gray-300 rounded-lg cursor-pointer bg-gray-50 focus:outline-none mb-4"
+          onChange={(e) => setFile(e.target.files[0])}
+          className="mb-4"
         />
 
         <button
           onClick={handleUpload}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition"
+          disabled={loading}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg w-full disabled:opacity-50"
         >
-          Upload & Transcribe
+          {loading ? "Transcribing..." : "Upload & Transcribe"}
         </button>
 
-        {status && <p className="mt-4 text-gray-700">{status}</p>}
-
-        {transcription && (
-          <div className="mt-6 text-left bg-gray-50 p-4 rounded-xl shadow-inner">
-            <h2 className="font-semibold mb-2 text-gray-800">📝 Transcription:</h2>
-            <p className="text-gray-700 whitespace-pre-wrap">{transcription}</p>
+        {transcript && (
+          <div className="mt-6 text-left bg-gray-100 p-4 rounded-lg">
+            <h2 className="font-semibold mb-2">📝 Transcript:</h2>
+            <p className="text-gray-700 whitespace-pre-wrap">{transcript}</p>
           </div>
         )}
       </div>
