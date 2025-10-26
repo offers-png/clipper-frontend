@@ -1,5 +1,17 @@
 import React, { useState } from "react";
 
+// Convert HH:MM:SS to total seconds
+function timeToSeconds(t) {
+  if (!t) return 0;
+  const parts = t.split(":").map(Number);
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  return Number(t) || 0;
+}
+
+// Estimate max video duration (optional manual override later)
+const VIDEO_DURATION = 300; // 5 minutes default, adjust dynamically later
+
 // Change this if you keep a .env value like VITE_API_BASE
 const API_BASE =
   import.meta.env.VITE_API_BASE || "https://clipper-api-final-1.onrender.com";
