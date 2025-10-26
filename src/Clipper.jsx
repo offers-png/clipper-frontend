@@ -359,3 +359,43 @@ export default function Clipper() {
 <p className="text-xs text-gray-500 text-center">
   {c.start} → {c.end}
 </p>
+               </div> {/* ✅ closes clip container */}
+            ))}
+
+            <div className="flex justify-between items-center mb-4">
+              <button
+                onClick={addClip}
+                disabled={clips.length >= 5}
+                className="bg-green-600 text-white px-4 py-2 rounded disabled:opacity-50"
+              >
+                + Add Clip
+              </button>
+              <button
+                onClick={cancelAll}
+                className="bg-gray-400 text-white px-3 py-2 rounded"
+              >
+                Cancel All
+              </button>
+            </div>
+
+            <button
+              onClick={handleClipAll}
+              disabled={isBusy || clips.length === 0}
+              className="w-full bg-blue-600 text-white rounded-lg py-2 disabled:opacity-60"
+            >
+              {isBusy ? "Clipping..." : "Clip All & Download ZIP"}
+            </button>
+
+            {!!clipMsg && (
+              <p className="text-green-700 text-sm mt-3">{clipMsg}</p>
+            )}
+          </>
+        )}
+
+        {!!error && (
+          <p className="text-red-600 text-sm mt-4">{error}</p>
+        )}
+      </div> {/* ✅ closes white box */}
+    </div>   {/* ✅ closes full-screen wrapper */}
+  );
+}
