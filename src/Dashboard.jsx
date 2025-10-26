@@ -5,27 +5,44 @@ export default function Dashboard() {
   const [records, setRecords] = useState([]);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState("");
 
+  // Load current user
   useEffect(() => {
     const getUser = async () => {
-      const { data } = await supabase.auth.getSession();
-      setUser(data?.session?.user ?? null);
+      const { data, error } = await supabase.auth.getSession();
+      if (error) {
+        console.error("Auth error:", error);
+        setErrorMsg("Authentication error. Try logging in again.");
+      } else {
+        console.log("User session:", data?.session?.user);
+        setUser(data?.session?.user ?? null);
+      }
     };
     getUser();
   }, []);
 
+  // Fetch data when user is loaded
   useEffect(() => {
     if (!user) return;
+
     const fetchData = async () => {
       setLoading(true);
+      console.log("Fetching records for user:", user.email);
+
       const { data, error } = await supabase
         .from("transcriptions")
         .select("*")
         .eq("user_email", user.email)
         .order("created_at", { ascending: false });
 
-      if (error) console.error("Error loading records:", error);
-      else setRecords(data);
+      if (error) {
+        console.error("Supabase fetch error:", error);
+        setErrorMsg("Error loading transcriptions.");
+      } else {
+        console.log("Records:", data);
+        setRecords(data || []);
+      }
 
       setLoading(false);
     };
@@ -33,10 +50,29 @@ export default function Dashboard() {
     fetchData();
   }, [user]);
 
+  // UI rendering
+  if (errorMsg) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 text-red-600">
+        <p>{errorMsg}</p>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
+        <p className="text-gray-500">Loading your transcriptions...</p>
+      </div>
+    );
+  }
+
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
-        <p className="text-gray-600 text-lg">Please log in to view your dashboard.</p>
+        <p className="text-gray-600 text-lg">
+          You must log in first to view your dashboard.
+        </p>
       </div>
     );
   }
@@ -45,10 +81,8 @@ export default function Dashboard() {
     <div className="min-h-screen bg-gray-50 flex flex-col items-center pt-12">
       <h1 className="text-3xl font-bold mb-6">🧾 My Transcriptions</h1>
 
-      {loading ? (
-        <p className="text-gray-500">Loading...</p>
-      ) : records.length === 0 ? (
-        <p className="text-gray-500">No transcriptions yet. Try uploading one!</p>
+      {records.length === 0 ? (
+        <p className="text-gray-500">No transcriptions found yet.</p>
       ) : (
         <div className="w-3/4 max-w-3xl bg-white rounded-2xl shadow p-6">
           {records.map((r) => (
