@@ -1,19 +1,24 @@
-import React, { useEffect, useState } from "react";
-import { supabase } from "./supabaseClient";
+import React from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import AuthForm from "./AuthForm";
 import Clipper from "./Clipper";
+import ProtectedRoute from "./ProtectedRoute";
 
 export default function App() {
-  const [user, setUser] = useState(null);
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUser(data.user));
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) =>
-      setUser(session?.user)
-    );
-    return () => listener.subscription.unsubscribe();
-  }, []);
-
-  if (!user) return <AuthForm />;
-  return <Clipper />;
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<AuthForm />} />
+        <Route
+          path="/clipper"
+          element={
+            <ProtectedRoute>
+              <Clipper />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
+  );
 }
