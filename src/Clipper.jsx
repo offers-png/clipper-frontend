@@ -392,6 +392,7 @@ export default function Clipper() {
             {!!clipMsg && <p className="text-green-700 text-sm mt-3">{clipMsg}</p>}
           </>
         )}
+         <Watermark />
 
         {!!error && (
           <div className="mt-4 p-3 rounded bg-red-50 text-red-700 text-sm border border-red-200">
