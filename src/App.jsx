@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { supabase } from "./authClient";
-import Auth from "./Auth";
+import { supabase } from "./supabaseClient";
+import AuthForm from "./AuthForm";
 import Clipper from "./Clipper";
 
 export default function App() {
@@ -14,7 +14,6 @@ export default function App() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  if (!user) return <Auth />;
-
+  if (!user) return <AuthForm />;
   return <Clipper />;
 }
