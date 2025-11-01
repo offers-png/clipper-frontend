@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
-import logo from "./assets/clipforge-logo.png";
+import logo from "./assets/react.svg";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "https://clipper-api-final-1.onrender.com";
 const VIDEO_DURATION = 300;
