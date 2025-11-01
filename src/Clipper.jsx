@@ -13,6 +13,88 @@ function timeToSeconds(t) {
   return Number(t) || 0;
 }
 
+// AI chat + templates
+const [aiMsgs, setAiMsgs] = useState([]); // [{role:'user'|'assistant', content:'...'}]
+const [aiInput, setAiInput] = useState("");
+const [aiBusy, setAiBusy] = useState(false);
+
+// Send a message to /ai_chat
+async function askAI(message) {
+  try {
+    setAiBusy(true);
+    const fd = new FormData();
+    fd.append("user_message", message);
+    fd.append("transcript", transcript || "");
+    fd.append("history", JSON.stringify(aiMsgs));
+    const res = await fetch(`${API_BASE}/ai_chat`, { method: "POST", body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "AI helper failed");
+
+    const next = [
+      ...aiMsgs,
+      { role: "user", content: message },
+      { role: "assistant", content: data.reply || "(no reply)" },
+    ];
+    setAiMsgs(next);
+  } catch (e) {
+    setError(e.message);
+  } finally {
+    setAiBusy(false);
+  }
+}
+
+// One-click templates
+function tplSummarize() {
+  if (!transcript) return setError("Transcribe first or paste a URL.");
+  askAI("Summarize the transcript into 5 bullet points with key takeaways.");
+}
+function tplTitles() {
+  if (!transcript) return setError("Transcribe first or paste a URL.");
+  askAI("Write 5 viral, punchy titles (max 60 chars each) based on this transcript.");
+}
+function tplHooks() {
+  if (!transcript) return setError("Transcribe first or paste a URL.");
+  askAI("Give me 7 short opening hooks (under 80 chars) tailored for Shorts/TikTok.");
+}
+function tplHashtags() {
+  if (!transcript) return setError("Transcribe first or paste a URL.");
+  askAI("Suggest 10 relevant hashtags + 10 SEO keywords for this content.");
+}
+async function tplBestMoments() {
+  try {
+    if (!transcript) return setError("Transcribe first or paste a URL.");
+    setAiBusy(true);
+    const fd = new FormData();
+    fd.append("transcript", transcript);
+    fd.append("max_clips", "3");
+    const res = await fetch(`${API_BASE}/auto_clip`, { method: "POST", body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Auto-clip failed");
+
+    // Load suggested moments into the clip list
+    if (Array.isArray(data.clips) && data.clips.length) {
+      setClips(
+        data.clips.slice(0, 5).map(c => ({
+          start: c.start || "00:00:00",
+          end: c.end || "00:00:10",
+          summary: c.summary || "",
+        }))
+      );
+      // Also show a friendly AI reply
+      setAiMsgs(m => [
+        ...m,
+        { role: "assistant", content: `I found ${data.clips.length} strong moments. I loaded the first ones into your Clip list.` }
+      ]);
+    } else {
+      setAiMsgs(m => [...m, { role: "assistant", content: "I couldn't find clear cut moments. Try a different video or longer transcript." }]);
+    }
+  } catch (e) {
+    setError(e.message);
+  } finally {
+    setAiBusy(false);
+  }
+}
+
 export default function Clipper() {
   const [mode, setMode] = useState("transcribe");
   const [file, setFile] = useState(null);
