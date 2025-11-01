@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "./supabaseClient";
+import logo from "./assets/clipforge-logo.png";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "https://clipper-api-final-1.onrender.com";
+const VIDEO_DURATION = 300;
 
 function timeToSeconds(t) {
   if (!t) return 0;
@@ -10,8 +12,6 @@ function timeToSeconds(t) {
   if (p.length === 2) return p[0]*60 + p[1];
   return Number(t) || 0;
 }
-
-const VIDEO_DURATION = 300;
 
 export default function Clipper() {
   const [mode, setMode] = useState("transcribe");
@@ -23,9 +23,11 @@ export default function Clipper() {
   const [clipMsg, setClipMsg] = useState("");
   const [clips, setClips] = useState([{ start: "00:00:00", end: "00:00:10" }]);
   const [watermark, setWatermark] = useState(true);
+  const [wmText, setWmText] = useState("@ClippedBySal");
+  const [fastMode, setFastMode] = useState(true);
+  const [previewSpeed, setPreviewSpeed] = useState(1);
 
   useEffect(() => {
-    // small guard: if no session, kick to /
     (async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) window.location.href = "/";
@@ -71,7 +73,8 @@ export default function Clipper() {
   function downloadBlob(blob, filename) {
     const u = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = u; a.download = filename || "download.bin"; document.body.appendChild(a);
+    a.href = u; a.download = filename || "download.bin";
+    document.body.appendChild(a);
     a.click(); a.remove(); URL.revokeObjectURL(u);
   }
 
@@ -81,6 +84,8 @@ export default function Clipper() {
     fd.append("start", start.trim());
     fd.append("end", end.trim());
     fd.append("watermark", watermark ? "1" : "0");
+    fd.append("wm_text", wmText);
+    fd.append("fast", fastMode ? "1" : "0");
     const res = await fetch(`${API_BASE}/clip`, { method: "POST", body: fd });
     if (!res.ok) throw new Error("Clip failed");
     return res.blob();
@@ -106,13 +111,11 @@ export default function Clipper() {
       if (!file) return setError("Select a video first.");
       if (clips.length === 0) return setError("No clips added.");
       setIsBusy(true);
-
-      // Use multi endpoint (more efficient) and include watermark flag
       const fd = new FormData();
       fd.append("file", file);
       fd.append("sections", JSON.stringify(clips));
       fd.append("watermark", watermark ? "1" : "0");
-
+      fd.append("wm_text", wmText);
       const res = await fetch(`${API_BASE}/clip_multi`, { method: "POST", body: fd });
       if (!res.ok) throw new Error("Multi-clip failed");
       const blob = await res.blob();
@@ -123,60 +126,94 @@ export default function Clipper() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Top bar */}
-      <div className="border-b bg-white">
-        <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="font-semibold">🎧 PTSEL Clipper Studio</div>
+    <div className="min-h-screen bg-gradient-to-b from-[#0B1020] via-[#12182B] to-[#1C2450] text-white">
+      {/* Header */}
+      <div className="border-b border-[#27324A] bg-[#0B1020]">
+        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <label className="text-sm flex items-center gap-2">
-              <input type="checkbox" checked={watermark} onChange={(e)=>setWatermark(e.target.checked)} />
+            <img src={logo} alt="ClipForge AI" className="h-8 w-8" />
+            <div className="text-lg font-semibold tracking-wide">ClipForge AI</div>
+          </div>
+          <div className="flex items-center gap-3 text-sm">
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={watermark} onChange={e=>setWatermark(e.target.checked)} />
               Watermark
             </label>
-            <button onClick={handleLogout} className="text-sm text-white bg-gray-800 px-3 py-1 rounded">
+            {watermark && (
+              <input
+                value={wmText}
+                onChange={e=>setWmText(e.target.value)}
+                placeholder="@YourHandle"
+                className="bg-[#12182B] border border-[#27324A] text-white text-xs rounded-md px-2 py-1 w-36 outline-none"
+              />
+            )}
+            <button onClick={handleLogout} className="bg-[#6C5CE7] hover:bg-[#5A4ED1] px-3 py-1 rounded text-white">
               Logout
             </button>
           </div>
         </div>
       </div>
 
+      {/* Main */}
       <div className="max-w-3xl mx-auto p-6">
         {/* Tabs */}
         <div className="flex gap-2 mb-6">
           <button
-            className={`px-4 py-2 rounded-lg border ${mode==="transcribe" ? "bg-blue-600 text-white border-blue-600":""}`}
+            className={`px-4 py-2 rounded-lg border ${mode==="transcribe" ? "bg-[#6C5CE7] border-[#6C5CE7]" : "border-[#27324A] bg-[#12182B]"}`}
             onClick={()=>setMode("transcribe")}
           >Transcribe</button>
           <button
-            className={`px-4 py-2 rounded-lg border ${mode==="clip" ? "bg-blue-600 text-white border-blue-600":""}`}
+            className={`px-4 py-2 rounded-lg border ${mode==="clip" ? "bg-[#6C5CE7] border-[#6C5CE7]" : "border-[#27324A] bg-[#12182B]"}`}
             onClick={()=>setMode("clip")}
           >Clip</button>
         </div>
 
-        {/* Shared file picker */}
-        <div className="mb-4">
-          <input type="file" accept="audio/*,video/*" onChange={(e)=>setFile(e.target.files?.[0]||null)} />
-          {file && <p className="text-xs text-gray-500 mt-1">Selected: {file.name}</p>}
+        {/* Speed + Fast mode */}
+        <div className="flex items-center gap-6 mb-4 text-sm">
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={fastMode} onChange={e=>setFastMode(e.target.checked)} />
+            Instant clip (fast mode)
+          </label>
+          <label className="flex items-center gap-2">
+            Preview speed
+            <select
+              value={previewSpeed}
+              onChange={e=>setPreviewSpeed(Number(e.target.value))}
+              className="bg-[#12182B] border border-[#27324A] rounded-md px-2 py-1"
+            >
+              {[0.5,0.75,1,1.25,1.5,2].map(v=><option key={v} value={v}>{v}×</option>)}
+            </select>
+          </label>
         </div>
 
-        {/* Mode: Transcribe */}
+        {/* Shared file picker */}
+        <div className="mb-4">
+          <input type="file" accept="audio/*,video/*" onChange={e=>setFile(e.target.files?.[0]||null)} />
+          {file && <p className="text-xs text-gray-400 mt-1">Selected: {file.name}</p>}
+        </div>
+
+        {/* === TRANSCRIBE MODE === */}
         {mode==="transcribe" && (
           <>
             <div className="mb-3">
               <label className="block text-sm font-medium mb-1">Or paste a URL (YouTube/TikTok/MP3/MP4)</label>
               <input
-                type="url" value={url} onChange={(e)=>setUrl(e.target.value)}
-                placeholder="https://..." className="w-full rounded border px-3 py-2"
+                type="url"
+                value={url}
+                onChange={e=>setUrl(e.target.value)}
+                placeholder="https://..."
+                className="w-full bg-[#12182B] border border-[#27324A] rounded px-3 py-2 text-white"
               />
-              <p className="text-xs text-gray-500 mt-1">If a URL is provided, the file picker is ignored.</p>
+              <p className="text-xs text-gray-400 mt-1">If a URL is provided, the file picker is ignored.</p>
             </div>
             <button
-              onClick={handleTranscribe} disabled={isBusy}
-              className="w-full bg-blue-600 text-white rounded-lg py-2 disabled:opacity-60"
+              onClick={handleTranscribe}
+              disabled={isBusy}
+              className="w-full bg-[#6C5CE7] hover:bg-[#5A4ED1] text-white rounded-lg py-2 disabled:opacity-60"
             >{isBusy ? "Processing..." : "Upload & Transcribe"}</button>
 
             {!!transcript && (
-              <div className="mt-5 border rounded-lg p-3 bg-white">
+              <div className="mt-5 border border-[#27324A] rounded-lg p-3 bg-[#12182B]">
                 <div className="font-semibold mb-1">📝 Transcript</div>
                 <div className="text-sm whitespace-pre-wrap leading-6 max-h-64 overflow-auto">{transcript}</div>
               </div>
@@ -184,48 +221,49 @@ export default function Clipper() {
           </>
         )}
 
-        {/* Mode: Clip */}
+        {/* === CLIP MODE === */}
         {mode==="clip" && (
           <>
-            <div className="mb-3 text-sm text-gray-600">
+            <div className="mb-3 text-sm text-gray-400">
               Add up to 5 clip segments. Clip individually or all at once.
             </div>
 
             {clips.map((c, idx)=>(
-              <div key={idx} className="border rounded-lg p-3 mb-3 bg-white">
+              <div key={idx} className="border border-[#27324A] rounded-lg p-3 mb-3 bg-[#12182B]">
                 <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-medium text-sm">🎬 Clip {idx+1}</h3>
+                  <h3 className="font-medium text-sm text-white/80">🎬 Clip {idx+1}</h3>
                   <div className="flex gap-2">
                     <button
                       onClick={()=>handleClipSingle(idx)}
                       disabled={isBusy}
-                      className="text-xs bg-blue-600 text-white px-3 py-1 rounded disabled:opacity-60"
+                      className="text-xs bg-[#6C5CE7] hover:bg-[#5A4ED1] text-white px-3 py-1 rounded disabled:opacity-60"
                     >Clip This</button>
                     <button
                       onClick={()=>cancelClip(idx)}
                       disabled={isBusy}
-                      className="text-xs bg-gray-300 px-2 py-1 rounded hover:bg-gray-400"
+                      className="text-xs bg-gray-500 hover:bg-gray-600 text-white px-2 py-1 rounded"
                     >Cancel</button>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 mb-3">
                   <input
-                    type="text" value={c.start}
-                    onChange={(e)=>updateClip(idx,"start",e.target.value)}
+                    type="text"
+                    value={c.start}
+                    onChange={e=>updateClip(idx,"start",e.target.value)}
                     placeholder="Start (HH:MM:SS)"
-                    className="rounded border px-2 py-1 text-sm"
+                    className="rounded border border-[#27324A] bg-[#0B1020] text-sm px-2 py-1 text-white"
                   />
                   <input
-                    type="text" value={c.end}
-                    onChange={(e)=>updateClip(idx,"end",e.target.value)}
+                    type="text"
+                    value={c.end}
+                    onChange={e=>updateClip(idx,"end",e.target.value)}
                     placeholder="End (HH:MM:SS)"
-                    className="rounded border px-2 py-1 text-sm"
+                    className="rounded border border-[#27324A] bg-[#0B1020] text-sm px-2 py-1 text-white"
                   />
                 </div>
 
-                {/* Timeline */}
-                <div className="relative h-2 bg-gray-200 rounded-full overflow-hidden mb-2">
+                <div className="relative h-2 bg-[#27324A] rounded-full overflow-hidden mb-2">
                   {(() => {
                     const s = timeToSeconds(c.start);
                     const e = timeToSeconds(c.end);
@@ -233,13 +271,13 @@ export default function Clipper() {
                     const sp = Math.min((s/total)*100, 100);
                     const ep = Math.min((e/total)*100, 100);
                     const w = Math.max(ep - sp, 2);
-                    return <div className="absolute h-full bg-blue-500" style={{ left:`${sp}%`, width:`${w}%` }} />;
+                    return <div className="absolute h-full bg-[#6C5CE7]" style={{ left:`${sp}%`, width:`${w}%` }} />;
                   })()}
                 </div>
-                <p className="text-xs text-gray-500 text-center">{c.start} → {c.end}</p>
 
-                {/* Snippet from transcript (simple substring demo) */}
-                <div className="mt-3 text-xs text-gray-600 bg-gray-50 rounded p-2">
+                <p className="text-xs text-gray-400 text-center">{c.start} → {c.end}</p>
+
+                <div className="mt-3 text-xs text-gray-300 bg-[#0F172A] rounded p-2">
                   <div className="font-semibold mb-1">Snippet</div>
                   <div className="line-clamp-3">
                     {transcript ? transcript.slice(0, 240) : "— No transcript available for this range —"}
@@ -249,10 +287,10 @@ export default function Clipper() {
             ))}
 
             <div className="flex justify-between items-center mb-4">
-              <button onClick={addClip} disabled={clips.length>=5} className="bg-emerald-600 text-white px-4 py-2 rounded disabled:opacity-50">
+              <button onClick={addClip} disabled={clips.length>=5} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded disabled:opacity-50">
                 + Add Clip
               </button>
-              <button onClick={cancelAll} className="bg-gray-400 text-white px-3 py-2 rounded">
+              <button onClick={cancelAll} className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-2 rounded">
                 Cancel All
               </button>
             </div>
@@ -260,17 +298,16 @@ export default function Clipper() {
             <button
               onClick={handleClipAll}
               disabled={isBusy || clips.length===0}
-              className="w-full bg-indigo-600 text-white rounded-lg py-2 disabled:opacity-60"
+              className="w-full bg-[#6C5CE7] hover:bg-[#5A4ED1] text-white rounded-lg py-2 disabled:opacity-60"
             >{isBusy ? "Clipping..." : "Clip All & Download ZIP"}</button>
 
-            {!!clipMsg && <p className="text-green-700 text-sm mt-3">{clipMsg}</p>}
-            {!!error && <p className="text-red-600 text-sm mt-3">{error}</p>}
+            {!!clipMsg && <p className="text-green-400 text-sm mt-3">{clipMsg}</p>}
+            {!!error && <p className="text-red-400 text-sm mt-3">{error}</p>}
           </>
         )}
 
-        {/* subtle watermark footer */}
-        <div className="mt-10 text-center text-[10px] text-gray-400 select-none">
-          © {new Date().getFullYear()} PTSEL • Watermark: @{watermark ? "ClippedBySal" : "disabled"}
+        <div className="mt-10 text-center text-[10px] text-gray-500 select-none">
+          © {new Date().getFullYear()} ClipForge AI • Watermark: {watermark ? wmText : "off"}
         </div>
       </div>
     </div>
