@@ -306,6 +306,36 @@ export default function Clipper() {
           </>
         )}
 
+        {/* === AI Helper Sidebar === */}
+<div className="mt-10 border border-[#27324A] bg-[#12182B] rounded-lg p-4">
+  <h3 className="text-lg font-semibold mb-2">🤖 AI Helper</h3>
+  <p className="text-sm text-gray-400 mb-3">
+    Ask ClipForge AI to summarize, find viral moments, or suggest titles.
+  </p>
+
+  <textarea
+    placeholder="Ask something about your transcript..."
+    className="w-full bg-[#0B1020] border border-[#27324A] rounded-lg p-2 text-sm text-white mb-3"
+    rows={3}
+    id="ai-helper-input"
+  ></textarea>
+
+  <button
+    onClick={async () => {
+      const q = document.getElementById("ai-helper-input").value;
+      const res = await fetch(`${API_BASE}/auto_clip`, {
+        method: "POST",
+        body: new URLSearchParams({ transcript, question: q })
+      });
+      const data = await res.json();
+      alert("AI says:\n\n" + JSON.stringify(data, null, 2));
+    }}
+    className="bg-[#6C5CE7] hover:bg-[#5A4ED1] text-white px-4 py-2 rounded"
+  >
+    Ask AI
+  </button>
+</div>
+
         <div className="mt-10 text-center text-[10px] text-gray-500 select-none">
           © {new Date().getFullYear()} ClipForge AI • Watermark: {watermark ? wmText : "off"}
         </div>
