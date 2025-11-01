@@ -2,18 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Optional custom tweaks */
-body {
-  @apply bg-gray-50 text-gray-900;
-}
-body {
-  @apply bg-gradient-to-br from-blue-50 via-white to-blue-100 text-gray-900;
-}
-
-button {
-  @apply transition-transform hover:scale-105;
+/* Optional: global resets */
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', sans-serif;
+  background-color: #0B1020; /* default dark */
+  color: white;
 }
 
-h1 {
-  @apply text-3xl font-bold bg-gradient-to-r from-blue-600 to-green-500 bg-clip-text text-transparent;
+/* Custom scrollbar for ClipForge AI */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: #6C5CE7;
+  border-radius: 4px;
 }
