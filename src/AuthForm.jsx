@@ -2,92 +2,59 @@ import React, { useState } from "react";
 import { supabase } from "./supabaseClient";
 
 export default function AuthForm() {
-  const [mode, setMode] = useState("signin"); // signin | signup
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  async function handleEmailAuth(e) {
-    e.preventDefault();
-    if (mode === "signup") {
-      const { error } = await supabase.auth.signUp({ email, password });
-      if (error) return alert(error.message);
-      alert("Signup successful. Check your email to confirm.");
-    } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) return alert(error.message);
-      window.location.href = "/clipper";
-    }
-  }
+  const handleSignup = async () => {
+    const { error } = await supabase.auth.signUp({ email, password });
+    if (error) alert(error.message);
+    else alert("Signup successful! Check your email to confirm.");
+  };
 
-  async function handleGoogle() {
+  const handleLogin = async () => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) alert(error.message);
+    else window.location.href = "/clipper";
+  };
+
+  const handleGoogleLogin = async () => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/clipper` }
+      options: { redirectTo: "https://clipper-frontend.onrender.com/clipper" },
     });
     if (error) alert(error.message);
-  }
+  };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-sky-50 to-emerald-50">
-      <div className="w-full max-w-md bg-white/90 backdrop-blur rounded-2xl shadow p-6">
-        <div className="text-center mb-4">
-          <div className="text-2xl font-bold">🎧 PTSEL Clipper Studio</div>
-          <div className="text-gray-500 text-sm">Sign in to continue</div>
-        </div>
+    <div className="auth-bg">
+      <div className="auth-card text-center">
+        <h2 className="text-2xl font-bold mb-2 text-white">ClipForge AI</h2>
+        <p className="text-sm text-white/50 mb-6">Sign in to continue</p>
 
-        <div className="flex gap-2 justify-center mb-4">
-          <button
-            className={`px-4 py-2 rounded-lg border ${mode === "signin" ? "bg-blue-600 text-white border-blue-600" : ""}`}
-            onClick={() => setMode("signin")}
-          >
-            Sign In
-          </button>
-          <button
-            className={`px-4 py-2 rounded-lg border ${mode === "signup" ? "bg-blue-600 text-white border-blue-600" : ""}`}
-            onClick={() => setMode("signup")}
-          >
-            Sign Up
-          </button>
-        </div>
+        <input
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        <input
+          type="password"
+          placeholder="Password"
+          className="mt-3"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
 
-        <form onSubmit={handleEmailAuth} className="space-y-3">
-          <input
-            type="email"
-            placeholder="Email"
-            className="w-full border rounded px-3 py-2"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            className="w-full border rounded px-3 py-2"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-          <button className="w-full bg-blue-600 text-white rounded-lg py-2">
-            {mode === "signup" ? "Create account" : "Sign in"}
-          </button>
-        </form>
+        <button onClick={handleLogin} className="btn-primary">Sign In</button>
+        <button onClick={handleSignup} className="btn-primary bg-[#FF4D4D] hover:bg-[#e63e3e]">Sign Up</button>
 
-        <div className="my-4 flex items-center gap-3">
-          <div className="h-px bg-gray-200 flex-1" />
-          <div className="text-xs text-gray-400">OR</div>
-          <div className="h-px bg-gray-200 flex-1" />
-        </div>
-
-        <button
-          onClick={handleGoogle}
-          className="w-full border rounded-lg py-2 hover:bg-gray-50"
-        >
+        <div className="mt-4 text-white/50 text-sm">OR</div>
+        <button onClick={handleGoogleLogin} className="btn-google">
+          <img src="https://www.svgrepo.com/show/355037/google.svg" alt="Google" />
           Continue with Google
         </button>
 
-        <div className="mt-6 text-center text-xs text-gray-400">
-          © {new Date().getFullYear()} PTSEL • All rights reserved
-        </div>
+        <div className="footer">© 2025 ClipForge AI • All rights reserved</div>
       </div>
     </div>
   );
