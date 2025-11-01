@@ -12,6 +12,72 @@ function timeToSeconds(t) {
   if (p.length === 2) return p[0]*60 + p[1];
   return Number(t) || 0;
 }
+{/* AI Helper + Templates */}
+<div className="mt-8 bg-[#0f1422] border border-white/10 rounded-xl p-4 text-white">
+  <div className="flex items-center justify-between mb-3">
+    <div className="font-semibold text-lg flex items-center gap-2">
+      <span>🤖 AI Helper</span>
+    </div>
+    <div className="hidden md:flex gap-2">
+      <button onClick={tplBestMoments} className="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50" disabled={aiBusy}>
+        🎬 Best 3 Moments
+      </button>
+      <button onClick={tplTitles} className="px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50" disabled={aiBusy}>
+        ✍️ Viral Titles
+      </button>
+      <button onClick={tplHooks} className="px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50" disabled={aiBusy}>
+        💬 Hooks
+      </button>
+      <button onClick={tplHashtags} className="px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50" disabled={aiBusy}>
+        #️⃣ Hashtags
+      </button>
+      <button onClick={tplSummarize} className="px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50" disabled={aiBusy}>
+        📝 Summary
+      </button>
+    </div>
+  </div>
+
+  {/* message list */}
+  <div className="space-y-2 max-h-56 overflow-auto bg-black/20 rounded p-3">
+    {aiMsgs.length === 0 && (
+      <div className="text-white/60 text-sm">
+        Ask ClipForge AI to summarize, propose titles, find moments, or write hooks.
+      </div>
+    )}
+    {aiMsgs.map((m, i) => (
+      <div key={i} className={`text-sm leading-6 ${m.role === 'assistant' ? 'text-white' : 'text-indigo-300'}`}>
+        <span className="opacity-70 mr-1">{m.role === 'assistant' ? 'AI:' : 'You:'}</span>{m.content}
+      </div>
+    ))}
+  </div>
+
+  {/* input row */}
+  <div className="mt-3 flex gap-2">
+    <textarea
+      value={aiInput}
+      onChange={e => setAiInput(e.target.value)}
+      placeholder="Ask something about your transcript…"
+      className="flex-1 bg-black/30 border border-white/10 rounded p-2 text-sm"
+      rows={2}
+    />
+    <button
+      onClick={() => { if (aiInput.trim()) { askAI(aiInput.trim()); setAiInput(""); } }}
+      disabled={aiBusy}
+      className="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 h-[42px] self-end"
+    >
+      {aiBusy ? 'Thinking…' : 'Ask AI'}
+    </button>
+  </div>
+
+  {/* Mobile template buttons */}
+  <div className="mt-3 grid grid-cols-2 gap-2 md:hidden">
+    <button onClick={tplBestMoments} className="px-3 py-2 rounded bg-indigo-600">🎬 Moments</button>
+    <button onClick={tplTitles} className="px-3 py-2 rounded bg-slate-700">✍️ Titles</button>
+    <button onClick={tplHooks} className="px-3 py-2 rounded bg-slate-700">💬 Hooks</button>
+    <button onClick={tplHashtags} className="px-3 py-2 rounded bg-slate-700">#️⃣ Hashtags</button>
+    <button onClick={tplSummarize} className="px-3 py-2 rounded bg-slate-700 col-span-2">📝 Summary</button>
+  </div>
+</div>
 
 // AI chat + templates
 const [aiMsgs, setAiMsgs] = useState([]); // [{role:'user'|'assistant', content:'...'}]
