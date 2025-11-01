@@ -2,18 +2,52 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom global styles */
+/* ====== GLOBAL CLIPFORGE AI STYLES ====== */
+
 body {
-  background-color: #0B1020;
-  color: white;
-  font-family: 'Inter', sans-serif;
+  @apply min-h-screen font-sans text-white;
+  background: radial-gradient(1200px 600px at 70% -20%, #1C2450 0%, #0B1020 55%);
 }
 
-/* Optional: glowing button styles */
-button {
-  transition: all 0.2s ease;
+/* Centered container on auth page */
+.auth-bg {
+  @apply flex items-center justify-center min-h-screen;
+  background: radial-gradient(800px 500px at 60% -10%, #6C5CE7 0%, #0B1020 55%);
 }
 
-button:hover {
-  transform: scale(1.03);
+/* Auth card */
+.auth-card {
+  @apply bg-[#12182B] border border-[#27324A] rounded-2xl shadow-xl p-8 w-96;
+}
+
+/* Labels and inputs */
+label {
+  @apply text-sm text-white/70 block mb-1;
+}
+
+input[type="email"],
+input[type="password"] {
+  @apply w-full p-2 rounded-md bg-[#0F172A] border border-[#27324A] text-white placeholder-white/30 outline-none;
+}
+input:focus {
+  @apply border-[#6C5CE7];
+}
+
+/* Buttons */
+.btn-primary {
+  @apply bg-[#6C5CE7] hover:bg-[#5A4ED1] text-white font-semibold py-2 px-4 rounded-md w-full mt-2 transition-all duration-150;
+}
+
+.btn-google {
+  @apply flex items-center justify-center gap-2 bg-white text-[#0F172A] hover:bg-gray-100 font-medium py-2 px-4 rounded-md w-full mt-2 transition-all duration-150;
+}
+
+.btn-google img {
+  width: 20px;
+  height: 20px;
+}
+
+/* Footer */
+.footer {
+  @apply text-center text-xs text-white/40 mt-4;
 }
