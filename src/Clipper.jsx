@@ -31,7 +31,9 @@ export default function Clipper() {
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState("");
   const [clipMsg, setClipMsg] = useState("");
-  const [clips, setClips] = useState([{ start: "00:00:00", end: "00:00:10", summary: "" }]);
+  const [clips, setClips] = useState([
+    { start: "00:00:00", end: "00:00:10", summary: "", previewUrl: "", exportUrl: "" },
+  ]);
 
   // watermark + speed
   const [watermarkOn, setWatermarkOn] = useState(true);
@@ -46,6 +48,17 @@ export default function Clipper() {
   const [aiBusy, setAiBusy] = useState(false);
   const aiBottomRef = useRef(null);
   useEffect(() => { aiBottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [aiMsgs]);
+
+  // modal preview
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalSrc, setModalSrc] = useState("");
+  const [modalTitle, setModalTitle] = useState("");
+  const modalVideoRef = useRef(null);
+  useEffect(() => {
+    if (modalOpen && modalVideoRef.current) {
+      try { modalVideoRef.current.playbackRate = Number(previewSpeed) || 1; } catch {}
+    }
+  }, [modalOpen, previewSpeed]);
 
   const resetMessages = () => { setError(""); setClipMsg(""); };
 
@@ -81,72 +94,151 @@ export default function Clipper() {
   // ---------- Clip helpers ----------
   function addClip() {
     if (clips.length >= 5) return;
-    setClips([...clips, { start: "00:00:00", end: "00:00:10", summary: "" }]);
+    setClips([...clips, { start: "00:00:00", end: "00:00:10", summary: "", previewUrl: "", exportUrl: "" }]);
   }
   function updateClip(i, k, v) { const n=[...clips]; n[i][k]=v; setClips(n); }
   function cancelClip(i) { setClips(clips.filter((_, idx) => idx !== i)); }
   function cancelAll() { setClips([]); setClipMsg(""); }
 
-  function deriveDownloadName(original, start, end) {
-    const base = (original || "video").replace(/\.[^.]+$/, "");
-    return `${base}_${start.replaceAll(":","-")}-${end.replaceAll(":","-")}.mp4`;
+  function setClipPreview(i, url) {
+    const n = [...clips]; n[i].previewUrl = url || ""; setClips(n);
   }
-  function downloadBlob(blob, filename) {
-    const u = URL.createObjectURL(blob);
+  function setClipExport(i, url) {
+    const n = [...clips]; n[i].exportUrl = url || ""; setClips(n);
+  }
+
+  function deriveName(baseName, start, end, suffix) {
+    const base = (baseName || "video").replace(/\.[^.]+$/, "");
+    const core = `${base}_${start.replaceAll(":","-")}-${end.replaceAll(":","-")}`;
+    return suffix ? `${core}_${suffix}.mp4` : `${core}.mp4`;
+  }
+
+  function downloadUrl(path, filename) {
+    // backend returns /media/... paths; prefix API_BASE
+    const href = path.startsWith("http") ? path : `${API_BASE}${path}`;
     const a = document.createElement("a");
-    a.href = u; a.download = filename || "download.bin";
-    document.body.appendChild(a);
-    a.click(); a.remove(); URL.revokeObjectURL(u);
+    a.href = href; a.download = filename || "clip.mp4";
+    document.body.appendChild(a); a.click(); a.remove();
   }
 
-  async function clipSingleSection({ start, end }) {
-    const fd = new FormData();
-    fd.append("file", file);
-    fd.append("start", start.trim());
-    fd.append("end", end.trim());
-    // backend expects watermark text in "watermark" (empty for off)
-    fd.append("watermark", watermarkOn ? wmText : "");
-    fd.append("fast", fastMode ? "1" : "0");
-    const res = await fetch(`${API_BASE}/clip`, { method: "POST", body: fd });
-    if (!res.ok) throw new Error("Clip failed");
-    return res.blob();
-  }
-
-  async function handleClipSingle(i) {
+  // ---- Build single PREVIEW (480p) via /clip (preview_480=1, final_1080=0)
+  async function buildPreview(i) {
     try {
-      resetMessages();
+      resetMessages(); setIsBusy(true);
       if (!file) return setError("Select a video first.");
       const c = clips[i];
       if (!c?.start || !c?.end) return setError("Enter start & end times.");
-      setIsBusy(true);
-      const blob = await clipSingleSection(c);
-      downloadBlob(blob, deriveDownloadName(file.name, c.start, c.end));
-      setClipMsg(`✅ Clip ${i + 1} ready`);
-    } catch (e) { setError(e.message); }
-    finally { setIsBusy(false); }
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("start", c.start.trim());
+      fd.append("end", c.end.trim());
+      // backend stable-lite expects watermark flag+text separately
+      fd.append("watermark", watermarkOn ? "1" : "0");
+      fd.append("wm_text", wmText);
+      fd.append("preview_480", "1");
+      fd.append("final_1080", "0");
+      const res = await fetch(`${API_BASE}/clip`, { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || "Preview failed");
+      setClipPreview(i, data.preview_url || "");
+      setClipMsg(`✅ Preview ready for clip ${i+1}`);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setIsBusy(false);
+    }
   }
 
-  async function handleClipAll() {
+  // ---- Export single FULL 1080p via /clip (final_1080=1)
+  async function exportFull(i) {
     try {
-      resetMessages();
+      resetMessages(); setIsBusy(true);
+      if (!file) return setError("Select a video first.");
+      const c = clips[i];
+      if (!c?.start || !c?.end) return setError("Enter start & end times.");
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("start", c.start.trim());
+      fd.append("end", c.end.trim());
+      fd.append("watermark", watermarkOn ? "1" : "0");
+      fd.append("wm_text", wmText);
+      fd.append("preview_480", "0");
+      fd.append("final_1080", "1");
+      const res = await fetch(`${API_BASE}/clip`, { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || "Export failed");
+      if (data.final_url) {
+        setClipExport(i, data.final_url);
+        setClipMsg(`✅ Export ready for clip ${i+1}`);
+      } else {
+        throw new Error("No export URL returned");
+      }
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  // ---- Build ALL previews via /clip_multi (preview_480=1)
+  async function buildAllPreviews() {
+    try {
+      resetMessages(); setIsBusy(true);
       if (!file) return setError("Select a video first.");
       if (clips.length === 0) return setError("No clips added.");
-      setIsBusy(true);
       const fd = new FormData();
       fd.append("file", file);
       fd.append("sections", JSON.stringify(clips.map(({start,end})=>({start,end}))));
-      fd.append("watermark", watermarkOn ? wmText : "");
-      fd.append("fast", fastMode ? "1" : "0");
+      fd.append("watermark", watermarkOn ? "1" : "0");
+      fd.append("wm_text", wmText);
+      fd.append("preview_480", "1");
+      fd.append("final_1080", "0");
       const res = await fetch(`${API_BASE}/clip_multi`, { method: "POST", body: fd });
-      if (!res.ok) {
-        const d = await res.json().catch(()=>({})); 
-        throw new Error(d.error || "Multi-clip failed");
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || "Build-all previews failed");
+      // update each clip with its preview url
+      if (Array.isArray(data.items)) {
+        const next = [...clips];
+        data.items.forEach((it, idx) => {
+          if (next[idx]) next[idx].previewUrl = it.preview_url || "";
+        });
+        setClips(next);
       }
-      const blob = await res.blob();
-      downloadBlob(blob, "clips_bundle.zip");
-      setClipMsg("✅ All clips processed — ZIP downloaded.");
-    } catch (e) { setError(e.message); }
-    finally { setIsBusy(false); }
+      setClipMsg("✅ All previews ready");
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  // ---- Export ALL full (ZIP) via /clip_multi (final_1080=1)
+  async function exportAllFullZip() {
+    try {
+      resetMessages(); setIsBusy(true);
+      if (!file) return setError("Select a video first.");
+      if (clips.length === 0) return setError("No clips added.");
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("sections", JSON.stringify(clips.map(({start,end})=>({start,end}))));
+      fd.append("watermark", watermarkOn ? "1" : "0");
+      fd.append("wm_text", wmText);
+      fd.append("preview_480", "0");
+      fd.append("final_1080", "1");
+      const res = await fetch(`${API_BASE}/clip_multi`, { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || "Export-all failed");
+      if (data.zip_url) {
+        downloadUrl(data.zip_url, "clips_bundle.zip");
+        setClipMsg("✅ Export ZIP downloaded");
+      } else {
+        setClipMsg("✅ Exports completed");
+      }
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setIsBusy(false);
+    }
   }
 
   // ---------- AI: chat + templates ----------
@@ -205,6 +297,8 @@ export default function Clipper() {
             start: c.start || "00:00:00",
             end: c.end || "00:00:10",
             summary: c.summary || "",
+            previewUrl: "",
+            exportUrl: "",
           }))
         );
         setAiMsgs(m => [...m, { role: "assistant", content: `🎯 Loaded ${Math.min(5, data.clips.length)} suggested moments into your clip list.` }]);
@@ -228,6 +322,17 @@ export default function Clipper() {
         <button onClick={tplSummarize} disabled={aiBusy} className="px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50">📝 Summary</button>
       </div>
     );
+  }
+
+  // modal helpers
+  function openPreviewModal(src, title) {
+    setModalSrc(src.startsWith("http") ? src : `${API_BASE}${src}`);
+    setModalTitle(title || "Preview");
+    setModalOpen(true);
+  }
+  function closePreviewModal() {
+    setModalOpen(false);
+    setModalSrc("");
   }
 
   // ---------- UI ----------
@@ -345,11 +450,18 @@ export default function Clipper() {
           {mode==="clip" && (
             <>
               <div className="mb-3 text-sm text-gray-400">
-                Add up to 5 clip segments. Clip individually or all at once.
+                Add up to 5 clip segments. First **Build Preview**, then **Export Full 1080p** if you like it.
               </div>
 
-              <div className="mb-4">
+              <div className="mb-4 flex flex-wrap gap-2">
                 <TemplateBar />
+                <div className="flex-1" />
+                <button onClick={buildAllPreviews} disabled={isBusy || clips.length===0} className="px-3 py-1.5 rounded bg-[#334155] hover:bg-[#425173] disabled:opacity-50">
+                  ⚡ Build All Previews
+                </button>
+                <button onClick={exportAllFullZip} disabled={isBusy || clips.length===0} className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50">
+                  📦 Export All Full (ZIP)
+                </button>
               </div>
 
               {clips.map((c, idx)=>(
@@ -358,15 +470,25 @@ export default function Clipper() {
                     <h3 className="font-medium text-sm text-white/80">🎬 Clip {idx+1}</h3>
                     <div className="flex gap-2">
                       <button
-                        onClick={()=>handleClipSingle(idx)}
+                        onClick={()=>buildPreview(idx)}
                         disabled={isBusy}
                         className="text-xs bg-[#6C5CE7] hover:bg-[#5A4ED1] text-white px-3 py-1 rounded disabled:opacity-60"
-                      >Clip This</button>
+                      >Build Preview</button>
+                      <button
+                        onClick={()=>c.previewUrl ? openPreviewModal(c.previewUrl, `Clip ${idx+1} Preview`) : null}
+                        disabled={!c.previewUrl}
+                        className="text-xs bg-[#475569] hover:bg-[#5b6a80] text-white px-3 py-1 rounded disabled:opacity-60"
+                      >Preview</button>
+                      <button
+                        onClick={()=>exportFull(idx)}
+                        disabled={isBusy}
+                        className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded disabled:opacity-60"
+                      >Export Full 1080p</button>
                       <button
                         onClick={()=>cancelClip(idx)}
                         disabled={isBusy}
                         className="text-xs bg-gray-500 hover:bg-gray-600 text-white px-2 py-1 rounded"
-                      >Cancel</button>
+                      >Delete</button>
                     </div>
                   </div>
 
@@ -387,7 +509,7 @@ export default function Clipper() {
                     />
                   </div>
 
-                  {/* timeline */}
+                  {/* Timeline */}
                   <div className="relative h-2 bg-[#27324A] rounded-full overflow-hidden mb-2">
                     {(() => {
                       const s = timeToSeconds(c.start);
@@ -409,6 +531,19 @@ export default function Clipper() {
                       {c.summary || (transcript ? transcript.slice(0, 240) : "— No transcript available for this range —")}
                     </div>
                   </div>
+
+                  {/* Export link when ready */}
+                  {c.exportUrl && (
+                    <div className="mt-3 flex items-center justify-between bg-[#0B1020] border border-[#27324A] rounded p-2">
+                      <span className="text-xs text-green-400">✅ Full export ready</span>
+                      <button
+                        onClick={()=>downloadUrl(c.exportUrl, deriveName(file?.name, c.start, c.end, "1080p"))}
+                        className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded"
+                      >
+                        Download 1080p
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
 
@@ -420,12 +555,6 @@ export default function Clipper() {
                   Cancel All
                 </button>
               </div>
-
-              <button
-                onClick={handleClipAll}
-                disabled={isBusy || clips.length===0}
-                className="w-full bg-[#6C5CE7] hover:bg-[#5A4ED1] text-white rounded-lg py-2 disabled:opacity-60"
-              >{isBusy ? "Clipping..." : "Clip All & Download ZIP"}</button>
 
               {!!clipMsg && <p className="text-green-400 text-sm mt-3">{clipMsg}</p>}
               {!!error && <p className="text-red-400 text-sm mt-3">{error}</p>}
@@ -449,7 +578,7 @@ export default function Clipper() {
               >Hide</button>
             </div>
 
-            {/* template shortcuts in sidebar too */}
+            {/* template shortcuts */}
             <div className="p-3 border-b border-[#27324A]">
               <div className="flex flex-wrap gap-2">
                 <button onClick={tplBestMoments} disabled={aiBusy} className="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-sm">🎬 Moments</button>
@@ -520,6 +649,30 @@ export default function Clipper() {
           </button>
         )}
       </div>
+
+      {/* MODAL PREVIEW (Option 3) */}
+      {modalOpen && (
+        <div className="fixed inset-0 z-[100] bg-black/70 flex items-center justify-center p-4">
+          <div className="bg-[#0B1020] border border-[#27324A] rounded-xl max-w-4xl w-full p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="font-semibold">{modalTitle || "Preview"}</div>
+              <button onClick={closePreviewModal} className="text-sm bg-[#24304A] hover:bg-[#2c3b5c] px-3 py-1 rounded">Close</button>
+            </div>
+            <video
+              ref={modalVideoRef}
+              src={modalSrc}
+              controls
+              className="w-full rounded-lg"
+              onLoadedMetadata={()=>{
+                try { if (modalVideoRef.current) modalVideoRef.current.playbackRate = Number(previewSpeed) || 1; } catch {}
+              }}
+            />
+            <div className="mt-3 text-xs text-white/70">
+              Tip: change “Preview speed” (top toolbar) to audition pacing.
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
