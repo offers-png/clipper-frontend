@@ -3,7 +3,8 @@ import { supabase } from "./supabaseClient";
 import logo from "./assets/react.svg";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "https://clipper-api-final-1.onrender.com";
-const VIDEO_DURATION = 300;
+const ACCEPT = "video/mp4,video/quicktime,video/x-matroska,video/webm,audio/*";
+const VIDEO_DURATION = 300; // UI bar only
 
 function timeToSeconds(t) {
   if (!t) return 0;
@@ -14,29 +15,7 @@ function timeToSeconds(t) {
 }
 
 export default function Clipper() {
-  const [file, setFile] = useState(null);
-  const [url, setUrl] = useState("");
-  const [transcript, setTranscript] = useState("");
-  const [isBusy, setIsBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-
-  const [clips, setClips] = useState([
-    { start: "00:00:00", end: "00:00:10", summary: "", previewUrl: "", exporting: false },
-  ]);
-
-  const [watermarkOn, setWatermarkOn] = useState(true);
-  const [wmText, setWmText] = useState("@ClippedBySal");
-  const [fastMode, setFastMode] = useState(true);
-  const [exportHD, setExportHD] = useState(false);
-  const [previewSpeed, setPreviewSpeed] = useState(1);
-
-  const [aiMsgs, setAiMsgs] = useState([]);
-  const [aiInput, setAiInput] = useState("");
-  const [aiBusy, setAiBusy] = useState(false);
-
-  const videoRefs = useRef({});
-
+  // --- auth guard ---
   useEffect(() => {
     (async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -44,71 +23,196 @@ export default function Clipper() {
     })();
   }, []);
 
-  function resetMessages() {
-    setError("");
-    setNotice("");
-  }
+  // --- global state ---
+  const [file, setFile] = useState(null);           // one uploader for all modes
+  const [url, setUrl] = useState("");
+  const [mode, setMode] = useState("transcribe");   // "transcribe" | "autoclip" | "cliponly"
 
-  async function logout() {
+  // ux controls
+  const [fastMode, setFastMode] = useState(true);
+  const [previewSpeed, setPreviewSpeed] = useState(1);
+  const [watermark, setWatermark] = useState(true);
+  const [wmText, setWmText] = useState("@ClippedBySal");
+
+  // results & AI
+  const [transcript, setTranscript] = useState("");
+  const [clips, setClips] = useState([{ start: "00:00:00", end: "00:00:10" }]);
+  const [aiMsgs, setAiMsgs] = useState([]);
+  const [aiInput, setAiInput] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
+
+  // op state
+  const [isBusy, setIsBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [clipMsg, setClipMsg] = useState("");
+
+  // previews: index -> {url, name}
+  const [previews, setPreviews] = useState({});
+
+  // processing log (side panel)
+  const [log, setLog] = useState([]);
+  const logRef = useRef(null);
+  function pushLog(msg) {
+    setLog(l => [...l, `${new Date().toLocaleTimeString()}  •  ${msg}`]);
+  }
+  useEffect(() => {
+    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+  }, [log]);
+
+  function resetMsgs() { setError(""); setClipMsg(""); }
+
+  async function handleLogout() {
     await supabase.auth.signOut();
     window.location.href = "/";
   }
 
-  async function handleTranscribe() {
+  // =============== TRANSCRIBE / AUTOCLIP ===============
+  async function actionUpload() {
+    resetMsgs();
+    setIsBusy(true);
+    setLog([]);
+
     try {
-      resetMessages();
-      setIsBusy(true);
-      const fd = new FormData();
-      if (url.trim()) {
-        fd.append("url", url.trim());
-      } else {
-        if (!file) {
-          setError("Choose a file or paste a URL.");
-          setIsBusy(false);
-          return;
-        }
-        fd.append("file", file);
+      if (!file && !url.trim()) {
+        setError("Choose a file or paste a URL.");
+        return;
       }
-      const res = await fetch(`${API_BASE}/transcribe`, { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Transcription failed");
-      setTranscript(data.text || "(no text)");
-      setNotice("Transcript ready.");
+
+      // 1) Transcribe (for transcribe or autoclip)
+      if (mode === "transcribe" || mode === "autoclip") {
+        pushLog("Uploading for transcription…");
+        const fd = new FormData();
+        if (url.trim()) fd.append("url", url.trim());
+        else fd.append("file", file);
+
+        const res = await fetch(`${API_BASE}/transcribe`, { method: "POST", body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Transcription failed");
+        setTranscript(data.text || "(no text)");
+        pushLog("Transcription complete.");
+      }
+
+      // 2) If autoclip: call auto_clip and preload moments
+      if (mode === "autoclip") {
+        pushLog("Finding best moments…");
+        const ac = new FormData();
+        ac.append("transcript", transcript || "");
+        ac.append("max_clips", "3");
+        const r = await fetch(`${API_BASE}/auto_clip`, { method: "POST", body: ac });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error || "Auto-clip failed");
+
+        if (Array.isArray(j.clips) && j.clips.length) {
+          setClips(j.clips.slice(0, 5).map(c => ({
+            start: c.start || "00:00:00",
+            end:   c.end   || "00:00:10",
+            summary: c.summary || ""
+          })));
+          pushLog(`Loaded ${j.clips.length} suggested moments into your Clips list.`);
+        } else {
+          pushLog("No strong moments found. You can still set ranges manually.");
+        }
+      }
+
+      // 3) If cliponly: do nothing here, user uses Clip buttons below
+      if (mode === "cliponly") {
+        pushLog("Clip-only flow: set your time ranges below, then Clip or Export as ZIP.");
+      }
     } catch (e) {
-      setError(e.message || "Transcription error");
+      setError(e.message);
+      pushLog(`⚠️ ${e.message}`);
     } finally {
       setIsBusy(false);
     }
   }
 
+  // =============== AI HELPER ===============
+  async function askAI(message) {
+    try {
+      setAiBusy(true);
+      const fd = new FormData();
+      fd.append("user_message", message);
+      fd.append("transcript", transcript || "");
+      fd.append("history", JSON.stringify(aiMsgs));
+      const res = await fetch(`${API_BASE}/ai_chat`, { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "AI helper failed");
+
+      setAiMsgs(m => [...m, { role: "user", content: message }, { role: "assistant", content: data.reply || "(no reply)" }]);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
+  function tplSummarize() {
+    if (!transcript) return setError("Transcribe first or paste a URL.");
+    askAI("Summarize the transcript into 5 bullet points with key takeaways.");
+  }
+  function tplTitles() {
+    if (!transcript) return setError("Transcribe first or paste a URL.");
+    askAI("Write 5 viral, punchy titles (max 60 chars each) based on this transcript.");
+  }
+  function tplHooks() {
+    if (!transcript) return setError("Transcribe first or paste a URL.");
+    askAI("Give me 7 short opening hooks (under 80 chars) tailored for Shorts/TikTok.");
+  }
+  function tplHashtags() {
+    if (!transcript) return setError("Transcribe first or paste a URL.");
+    askAI("Suggest 10 relevant hashtags + 10 SEO keywords for this content.");
+  }
+  async function tplBestMoments() {
+    try {
+      if (!transcript) return setError("Transcribe first or paste a URL.");
+      setAiBusy(true);
+      const fd = new FormData();
+      fd.append("transcript", transcript);
+      fd.append("max_clips", "3");
+      const res = await fetch(`${API_BASE}/auto_clip`, { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Auto-clip failed");
+      if (Array.isArray(data.clips) && data.clips.length) {
+        setClips(
+          data.clips.slice(0, 5).map(c => ({
+            start: c.start || "00:00:00",
+            end: c.end || "00:00:10",
+            summary: c.summary || ""
+          }))
+        );
+        setAiMsgs(m => [...m, { role: "assistant", content: `I found ${data.clips.length} strong moments. Loaded into your Clip list.` }]);
+      } else {
+        setAiMsgs(m => [...m, { role: "assistant", content: "I couldn't find clear cut moments. Try another video." }]);
+      }
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
+  // =============== CLIPPING ===============
   function addClip() {
     if (clips.length >= 5) return;
-    setClips((c) => [
-      ...c,
-      { start: "00:00:00", end: "00:00:10", summary: "", previewUrl: "", exporting: false },
-    ]);
+    setClips([...clips, { start: "00:00:00", end: "00:00:10" }]);
   }
-
-  function updateClip(i, key, val) {
-    setClips((prev) => {
-      const n = [...prev];
-      n[i] = { ...n[i], [key]: val };
-      return n;
+  function updateClip(i, k, v) {
+    const n = [...clips];
+    n[i][k] = v;
+    setClips(n);
+  }
+  function removeClip(i) {
+    setClips(clips.filter((_, idx) => idx !== i));
+    setPreviews(p => {
+      const cp = { ...p };
+      delete cp[i];
+      return cp;
     });
   }
-
-  function removeClip(i) {
-    setClips((prev) => prev.filter((_, idx) => idx !== i));
-  }
-
-  function clearAllClips() {
+  function clearAll() {
     setClips([]);
-    setNotice("");
-  }
-
-  function deriveName(original, start, end, suffix = ".mp4") {
-    const base = (original || "video").replace(/\.[^.]+$/, "");
-    return `${base}_${start.replaceAll(":", "-")}-${end.replaceAll(":", "-")}${suffix}`;
+    setPreviews({});
+    setClipMsg("");
   }
 
   function downloadBlob(blob, filename) {
@@ -121,532 +225,385 @@ export default function Clipper() {
     a.remove();
     URL.revokeObjectURL(u);
   }
-
-  async function requestClipBlob({ start, end }) {
-    const fd = new FormData();
-    fd.append("file", file);
-    fd.append("start", start.trim());
-    fd.append("end", end.trim());
-    fd.append("watermark", watermarkOn ? "1" : "0");
-    fd.append("wm_text", wmText);
-    fd.append("fast", fastMode ? "1" : "0");
-    fd.append("hd", exportHD ? "1" : "0");
-    const res = await fetch(`${API_BASE}/clip`, { method: "POST", body: fd });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.error || "Clip failed");
-    }
-    return res.blob();
+  function fname(original, start, end) {
+    const base = (original || "video").replace(/\.[^.]+$/, "");
+    return `${base}_${start.replaceAll(":", "-")}-${end.replaceAll(":", "-")}.mp4`;
   }
 
-  async function handlePreview(i) {
+  async function clipOne(i) {
     try {
-      resetMessages();
-      if (!file) {
-        setError("Select a video first.");
-        return;
-      }
+      resetMsgs();
+      if (!file) return setError("Select or paste a video first.");
       const c = clips[i];
-      if (!c?.start || !c?.end) {
-        setError("Enter start and end times.");
-        return;
-      }
-      updateClip(i, "exporting", true);
-      const blob = await requestClipBlob(c);
-      const url = URL.createObjectURL(blob);
-      updateClip(i, "previewUrl", url);
-      setNotice(`Preview ready for clip ${i + 1}.`);
-      setTimeout(() => {
-        const v = videoRefs.current[i];
-        if (v) {
-          v.playbackRate = previewSpeed || 1;
-        }
-      }, 50);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      updateClip(i, "exporting", false);
-    }
-  }
-
-  async function handleDownload(i) {
-    try {
-      resetMessages();
-      const c = clips[i];
-      if (!file) {
-        setError("Select a video first.");
-        return;
-      }
-      if (!c?.start || !c?.end) {
-        setError("Enter start and end times.");
-        return;
-      }
-      updateClip(i, "exporting", true);
-      if (c.previewUrl) {
-        const r = await fetch(c.previewUrl);
-        const b = await r.blob();
-        downloadBlob(b, deriveName(file?.name, c.start, c.end));
-      } else {
-        const blob = await requestClipBlob(c);
-        downloadBlob(blob, deriveName(file?.name, c.start, c.end));
-      }
-      setNotice(`Downloaded clip ${i + 1}.`);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      updateClip(i, "exporting", false);
-    }
-  }
-
-  function discardPreview(i) {
-    const c = clips[i];
-    if (c?.previewUrl) {
-      URL.revokeObjectURL(c.previewUrl);
-    }
-    updateClip(i, "previewUrl", "");
-  }
-
-  async function handleZipAll() {
-    try {
-      resetMessages();
-      if (!file) {
-        setError("Select a video first.");
-        return;
-      }
-      if (clips.length === 0) {
-        setError("Add at least one clip.");
-        return;
-      }
+      if (!c?.start || !c?.end) return setError("Enter start & end times.");
       setIsBusy(true);
+      pushLog(`Clipping segment ${i + 1}…`);
+
       const fd = new FormData();
       fd.append("file", file);
-      fd.append(
-        "sections",
-        JSON.stringify(
-          clips.map(({ start, end }) => ({ start: start.trim(), end: end.trim() }))
-        )
-      );
-      fd.append("watermark", watermarkOn ? "1" : "0");
-      fd.append("wm_text", wmText);
+      fd.append("start", c.start.trim());
+      fd.append("end", c.end.trim());
+      fd.append("watermark", watermark ? wmText : "");
       fd.append("fast", fastMode ? "1" : "0");
-      fd.append("hd", exportHD ? "1" : "0");
-      const res = await fetch(`${API_BASE}/clip_multi`, { method: "POST", body: fd });
+
+      const res = await fetch(`${API_BASE}/clip`, { method: "POST", body: fd });
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error || "ZIP export failed");
+        const t = await res.text();
+        throw new Error(t || "Clip failed");
       }
       const blob = await res.blob();
-      downloadBlob(blob, "clips_bundle.zip");
-      setNotice("ZIP downloaded.");
+
+      // Preview first, user can download or discard
+      const url = URL.createObjectURL(blob);
+      setPreviews(p => ({ ...p, [i]: { url, name: fname(file?.name, c.start, c.end) } }));
+      setClipMsg(`✅ Preview ready for clip ${i + 1}.`);
+      pushLog(`Preview ready for clip ${i + 1}.`);
     } catch (e) {
       setError(e.message);
+      pushLog(`⚠️ ${e.message}`);
     } finally {
       setIsBusy(false);
     }
   }
 
-  async function askAI(message) {
+  async function exportZip() {
     try {
-      setAiBusy(true);
+      resetMsgs();
+      if (!file) return setError("Select a video first.");
+      if (clips.length === 0) return setError("No clips added.");
+      setIsBusy(true);
+      pushLog("Exporting all clips as ZIP…");
+
       const fd = new FormData();
-      fd.append("user_message", message);
-      fd.append("transcript", transcript || "");
-      fd.append("history", JSON.stringify(aiMsgs));
-      const res = await fetch(`${API_BASE}/ai_chat`, { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "AI helper failed");
-      setAiMsgs((m) => [...m, { role: "user", content: message }, { role: "assistant", content: data.reply || "(no reply)" }]);
+      fd.append("file", file);
+      fd.append("sections", JSON.stringify(clips));
+      fd.append("watermark", watermark ? wmText : "");
+      fd.append("fast", fastMode ? "1" : "0");
+
+      const res = await fetch(`${API_BASE}/clip_multi`, { method: "POST", body: fd });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || "Multi-clip failed");
+      }
+      const blob = await res.blob();
+      downloadBlob(blob, "clips_bundle.zip");
+      setClipMsg("✅ All clips processed — ZIP downloaded.");
+      pushLog("ZIP download complete.");
     } catch (e) {
       setError(e.message);
+      pushLog(`⚠️ ${e.message}`);
     } finally {
-      setAiBusy(false);
+      setIsBusy(false);
     }
   }
 
-  async function tplBestMoments() {
-    try {
-      if (!transcript) {
-        setError("Transcribe first or paste a URL.");
-        return;
-      }
-      setAiBusy(true);
-      const fd = new FormData();
-      fd.append("transcript", transcript);
-      fd.append("max_clips", "3");
-      const res = await fetch(`${API_BASE}/auto_clip`, { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Auto-clip failed");
-      if (Array.isArray(data.clips) && data.clips.length) {
-        setClips(
-          data.clips.slice(0, 5).map((c) => ({
-            start: c.start || "00:00:00",
-            end: c.end || "00:00:10",
-            summary: c.summary || "",
-            previewUrl: "",
-            exporting: false,
-          }))
-        );
-        setAiMsgs((m) => [...m, { role: "assistant", content: `Loaded ${Math.min(5, data.clips.length)} suggested moments into your list.` }]);
-      } else {
-        setAiMsgs((m) => [...m, { role: "assistant", content: "I couldn't find clear moments. Try a longer or different transcript." }]);
-      }
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setAiBusy(false);
-    }
-  }
-
-  function tplTitles() {
-    if (!transcript) {
-      setError("Transcribe first or paste a URL.");
-      return;
-    }
-    askAI("Write 5 viral, punchy titles (max 60 chars each) based on this transcript.");
-  }
-
-  function tplHooks() {
-    if (!transcript) {
-      setError("Transcribe first or paste a URL.");
-      return;
-    }
-    askAI("Give me 7 short opening hooks (under 80 chars) tailored for Shorts/TikTok.");
-  }
-
-  function tplHashtags() {
-    if (!transcript) {
-      setError("Transcribe first or paste a URL.");
-      return;
-    }
-    askAI("Suggest 10 relevant hashtags + 10 SEO keywords for this content.");
-  }
-
-  function tplSummarize() {
-    if (!transcript) {
-      setError("Transcribe first or paste a URL.");
-      return;
-    }
-    askAI("Summarize the transcript into 5 bullet points with key takeaways.");
-  }
-
-  const layoutTwoCols = useMemo(() => true, []);
+  // UI helpers
+  const headerButtons = useMemo(() => ([
+    { key: "transcribe", label: "Transcribe" },
+    { key: "autoclip",   label: "Auto Clip" },
+    { key: "cliponly",   label: "Clip Only" },
+  ]), []);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#0B1020] via-[#12182B] to-[#1C2450] text-white">
+      {/* Header */}
       <div className="border-b border-[#27324A] bg-[#0B1020]">
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img src={logo} alt="ClipForge AI" className="h-8 w-8" />
             <div className="text-lg font-semibold tracking-wide">ClipForge AI</div>
           </div>
-          <div className="flex items-center gap-4 text-sm">
+          <div className="flex items-center gap-3 text-sm">
             <label className="flex items-center gap-2">
-              <input type="checkbox" checked={watermarkOn} onChange={(e) => setWatermarkOn(e.target.checked)} />
+              <input type="checkbox" checked={watermark} onChange={e=>setWatermark(e.target.checked)} />
               Watermark
             </label>
-            {watermarkOn && (
+            {watermark && (
               <input
                 value={wmText}
-                onChange={(e) => setWmText(e.target.value)}
+                onChange={e=>setWmText(e.target.value)}
                 placeholder="@YourHandle"
-                className="bg-[#12182B] border border-[#27324A] text-white text-xs rounded-md px-2 py-1 w-40 outline-none"
+                className="bg-[#12182B] border border-[#27324A] text-white text-xs rounded-md px-2 py-1 w-36 outline-none"
               />
             )}
-            <button onClick={logout} className="bg-[#6C5CE7] hover:bg-[#5A4ED1] px-3 py-1 rounded text-white">
+            <button onClick={handleLogout} className="bg-[#6C5CE7] hover:bg-[#5A4ED1] px-3 py-1 rounded text-white">
               Logout
             </button>
           </div>
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto p-6">
-        <div className={layoutTwoCols ? "grid grid-cols-1 lg:grid-cols-[1.6fr,1fr] gap-6" : ""}>
-          <div className="space-y-6">
-            <div className="border border-[#27324A] rounded-xl p-4 bg-[#12182B]">
-              <div className="flex items-center justify-between gap-4 flex-wrap">
-                <div className="text-base font-semibold">Transcript</div>
-                <div className="flex items-center gap-5 text-sm">
-                  <label className="flex items-center gap-2">
-                    <input type="checkbox" checked={fastMode} onChange={(e) => setFastMode(e.target.checked)} />
-                    Instant clip
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input type="checkbox" checked={exportHD} onChange={(e) => setExportHD(e.target.checked)} />
-                    Export 1080p
-                  </label>
-                  <label className="flex items-center gap-2">
-                    Preview speed
-                    <select
-                      value={previewSpeed}
-                      onChange={(e) => setPreviewSpeed(Number(e.target.value))}
-                      className="bg-[#0B1020] border border-[#27324A] rounded-md px-2 py-1"
-                    >
-                      {[0.5, 0.75, 1, 1.25, 1.5, 2].map((v) => (
-                        <option key={v} value={v}>
-                          {v}×
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-              </div>
+      {/* Main */}
+      <div className="max-w-6xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
+        {/* Left column */}
+        <div>
+          {/* Controls Row */}
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <input
+              type="file"
+              accept={ACCEPT}
+              onChange={e => setFile(e.target.files?.[0] || null)}
+              className="block text-sm"
+            />
+            {file && <span className="text-xs text-gray-300">Selected: {file.name}</span>}
+          </div>
 
-              <div className="mt-3 grid gap-3 md:grid-cols-[1fr,auto]">
-                <input
-                  type="file"
-                  accept="audio/*,video/*"
-                  onChange={(e) => setFile(e.target.files?.[0] || null)}
-                  className="w-full text-xs"
-                />
-                <button
-                  onClick={handleTranscribe}
-                  disabled={isBusy}
-                  className="bg-[#6C5CE7] hover:bg-[#5A4ED1] text-white px-4 py-2 rounded disabled:opacity-60"
+          {/* Action buttons (Layout 1) */}
+          <div className="mb-5 flex flex-wrap items-center gap-2">
+            {headerButtons.map(b => (
+              <button
+                key={b.key}
+                onClick={() => setMode(b.key)}
+                className={`px-3 py-2 rounded-lg border ${
+                  mode === b.key ? "bg-[#6C5CE7] border-[#6C5CE7]" : "border-[#27324A] bg-[#12182B]"
+                }`}
+              >
+                {b.label}
+              </button>
+            ))}
+
+            <div className="ml-auto flex items-center gap-4 text-sm">
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={fastMode} onChange={e=>setFastMode(e.target.checked)} />
+                Instant clip (fast mode)
+              </label>
+              <label className="flex items-center gap-2">
+                Preview speed
+                <select
+                  value={previewSpeed}
+                  onChange={e=>setPreviewSpeed(Number(e.target.value))}
+                  className="bg-[#12182B] border border-[#27324A] rounded-md px-2 py-1"
                 >
-                  {isBusy ? "Processing…" : "Upload & Transcribe"}
-                </button>
-              </div>
-
-              <div className="mt-3">
-                <input
-                  type="url"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  placeholder="Or paste a URL (YouTube/TikTok/MP3/MP4)…"
-                  className="w-full bg-[#0B1020] border border-[#27324A] rounded px-3 py-2 text-white text-sm"
-                />
-              </div>
-
-              {transcript && (
-                <div className="mt-4 border border-[#27324A] rounded-lg p-3 bg-[#0B1020] max-h-56 overflow-auto text-sm whitespace-pre-wrap leading-6">
-                  {transcript}
-                </div>
-              )}
+                  {[0.5,0.75,1,1.25,1.5,2].map(v=> <option key={v} value={v}>{v}×</option>)}
+                </select>
+              </label>
             </div>
+          </div>
 
-            <div className="border border-[#27324A] rounded-xl p-4 bg-[#12182B]">
-              <div className="flex items-center justify-between mb-3">
-                <div className="text-base font-semibold">Clips</div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={addClip}
-                    disabled={clips.length >= 5}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded disabled:opacity-50 text-sm"
-                  >
-                    + Add Clip
-                  </button>
-                  <button onClick={clearAllClips} className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-2 rounded text-sm">
-                    Clear All
-                  </button>
-                  <button
-                    onClick={handleZipAll}
-                    disabled={isBusy || clips.length === 0 || !file}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded disabled:opacity-60 text-sm"
-                  >
-                    Export All as ZIP
-                  </button>
+          {/* URL input (for transcribe/autoclip) */}
+          {(mode !== "cliponly") && (
+            <div className="mb-3">
+              <label className="block text-sm font-medium mb-1">Or paste a URL (YouTube/TikTok/MP3/MP4)</label>
+              <input
+                type="url"
+                value={url}
+                onChange={e=>setUrl(e.target.value)}
+                placeholder="https://…"
+                className="w-full bg-[#12182B] border border-[#27324A] rounded px-3 py-2 text-white"
+              />
+              <p className="text-xs text-gray-400 mt-1">If a URL is provided, the file picker is ignored.</p>
+            </div>
+          )}
+
+          <button
+            onClick={actionUpload}
+            disabled={isBusy}
+            className="w-full bg-[#6C5CE7] hover:bg-[#5A4ED1] text-white rounded-lg py-2 disabled:opacity-60"
+          >
+            {isBusy ? "Processing..." :
+              mode === "transcribe" ? "Upload & Transcribe" :
+              mode === "autoclip"   ? "Upload & Auto Clip" :
+              "Use For Clip Only"
+            }
+          </button>
+
+          {/* Transcript panel */}
+          {(transcript && (mode !== "cliponly")) && (
+            <div className="mt-5 border border-[#27324A] rounded-lg p-3 bg-[#12182B]">
+              <div className="font-semibold mb-1">📝 Transcript</div>
+              <div className="text-sm whitespace-pre-wrap leading-6 max-h-64 overflow-auto">{transcript}</div>
+            </div>
+          )}
+
+          {/* Quick AI templates */}
+          <div className="mt-6 flex flex-wrap gap-2">
+            <button onClick={tplBestMoments} className="px-3 py-2 rounded bg-[#2B2F4A] hover:bg-[#3A3F63]">🎬 Best 3 Moments</button>
+            <button onClick={tplTitles} className="px-3 py-2 rounded bg-[#2B2F4A] hover:bg-[#3A3F63]">✍️ Viral Titles</button>
+            <button onClick={tplHooks} className="px-3 py-2 rounded bg-[#2B2F4A] hover:bg-[#3A3F63]">💬 Hooks</button>
+            <button onClick={tplHashtags} className="px-3 py-2 rounded bg-[#2B2F4A] hover:bg-[#3A3F63]">#️⃣ Hashtags</button>
+            <button onClick={tplSummarize} className="px-3 py-2 rounded bg-[#2B2F4A] hover:bg-[#3A3F63]">📝 Summary</button>
+          </div>
+
+          {/* Clips editor */}
+          <div className="mt-6">
+            <div className="mb-2 text-sm text-gray-300">Add up to 5 clip segments. Build previews then download or export ZIP.</div>
+
+            {clips.map((c, idx) => (
+              <div key={idx} className="border border-[#27324A] rounded-lg p-3 mb-4 bg-[#12182B]">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="font-medium text-sm text-white/80">🎬 Clip {idx + 1}</div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => clipOne(idx)}
+                      disabled={isBusy}
+                      className="text-xs bg-[#6C5CE7] hover:bg-[#5A4ED1] text-white px-3 py-1 rounded disabled:opacity-60"
+                    >Rebuild Preview</button>
+                    <button
+                      onClick={() => removeClip(idx)}
+                      className="text-xs bg-gray-500 hover:bg-gray-600 text-white px-2 py-1 rounded"
+                    >Delete</button>
+                  </div>
                 </div>
-              </div>
 
-              <div className="space-y-4">
-                {clips.map((c, idx) => {
-                  const s = timeToSeconds(c.start);
-                  const e = timeToSeconds(c.end);
-                  const sp = Math.min((s / VIDEO_DURATION) * 100, 100);
-                  const ep = Math.min((e / VIDEO_DURATION) * 100, 100);
-                  const w = Math.max(ep - sp, 2);
-                  return (
-                    <div key={idx} className="border border-[#27324A] rounded-lg p-3 bg-[#0B1020]">
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm font-medium opacity-80">🎬 Clip {idx + 1}</div>
-                        <div className="flex items-center gap-2">
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <input
+                    type="text"
+                    value={c.start}
+                    onChange={e=>updateClip(idx,"start",e.target.value)}
+                    placeholder="Start (HH:MM:SS)"
+                    className="rounded border border-[#27324A] bg-[#0B1020] text-sm px-2 py-1 text-white"
+                  />
+                  <input
+                    type="text"
+                    value={c.end}
+                    onChange={e=>updateClip(idx,"end",e.target.value)}
+                    placeholder="End (HH:MM:SS)"
+                    className="rounded border border-[#27324A] bg-[#0B1020] text-sm px-2 py-1 text-white"
+                  />
+                </div>
+
+                {/* timeline bar */}
+                <div className="relative h-2 bg-[#27324A] rounded-full overflow-hidden mb-2">
+                  {(() => {
+                    const s = timeToSeconds(c.start);
+                    const e = timeToSeconds(c.end);
+                    const total = VIDEO_DURATION;
+                    const sp = Math.min((s/total)*100, 100);
+                    const ep = Math.min((e/total)*100, 100);
+                    const w = Math.max(ep - sp, 2);
+                    return <div className="absolute h-full bg-[#6C5CE7]" style={{ left:`${sp}%`, width:`${w}%` }} />;
+                  })()}
+                </div>
+                <p className="text-xs text-gray-400 text-center">{c.start} → {c.end}</p>
+
+                {/* snippet */}
+                <div className="mt-3 text-xs text-gray-300 bg-[#0F172A] rounded p-2">
+                  <div className="font-semibold mb-1">Snippet</div>
+                  <div className="line-clamp-3">
+                    {transcript ? transcript.slice(0, 240) : "— No transcript available for this range —"}
+                  </div>
+                </div>
+
+                {/* Preview / Download */}
+                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
+                  <div className="text-xs text-gray-400">
+                    {previews[idx]?.url ? (
+                      <div className="space-y-2">
+                        <video
+                          src={previews[idx].url}
+                          controls
+                          playbackRate={previewSpeed}
+                          className="w-full rounded-lg border border-[#27324A] bg-black"
+                        />
+                        <div className="flex gap-2">
                           <button
-                            onClick={() => handlePreview(idx)}
-                            disabled={c.exporting || !file}
-                            className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded disabled:opacity-60"
-                          >
-                            {c.exporting ? "Processing…" : c.previewUrl ? "Rebuild Preview" : "Preview"}
-                          </button>
+                            onClick={() => {
+                              fetch(previews[idx].url).then(() =>
+                                downloadBlob(new Blob([], { type:"application/octet-stream" })))
+                            }}
+                            className="hidden"
+                          />
                           <button
-                            onClick={() => handleDownload(idx)}
-                            disabled={c.exporting || !file}
-                            className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded disabled:opacity-60"
+                            onClick={() => {
+                              // fetch blob from object URL to download properly
+                              fetch(previews[idx].url)
+                                .then(r => r.blob())
+                                .then(b => downloadBlob(b, previews[idx].name || "clip.mp4"));
+                            }}
+                            className="px-3 py-1 rounded bg-emerald-600 hover:bg-emerald-700"
                           >
                             Download
                           </button>
                           <button
-                            onClick={() => discardPreview(idx)}
-                            disabled={!c.previewUrl}
-                            className="text-xs bg-slate-600 hover:bg-slate-700 text-white px-3 py-1.5 rounded disabled:opacity-50"
+                            onClick={() => setPreviews(p => {
+                              const cp = { ...p }; delete cp[idx]; return cp;
+                            })}
+                            className="px-3 py-1 rounded bg-gray-600 hover:bg-gray-700"
                           >
                             Discard Preview
                           </button>
-                          <button
-                            onClick={() => removeClip(idx)}
-                            className="text-xs bg-gray-500 hover:bg-gray-600 text-white px-3 py-1.5 rounded"
-                          >
-                            Delete
-                          </button>
                         </div>
                       </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                        <input
-                          type="text"
-                          value={c.start}
-                          onChange={(e) => updateClip(idx, "start", e.target.value)}
-                          placeholder="Start (HH:MM:SS)"
-                          className="rounded border border-[#27324A] bg-[#0B1020] text-sm px-2 py-2 text-white"
-                        />
-                        <input
-                          type="text"
-                          value={c.end}
-                          onChange={(e) => updateClip(idx, "end", e.target.value)}
-                          placeholder="End (HH:MM:SS)"
-                          className="rounded border border-[#27324A] bg-[#0B1020] text-sm px-2 py-2 text-white"
-                        />
-                      </div>
-
-                      <div className="relative h-2 bg-[#27324A] rounded-full overflow-hidden my-3">
-                        <div className="absolute h-full bg-[#6C5CE7]" style={{ left: `${sp}%`, width: `${w}%` }} />
-                      </div>
-
-                      <div className="grid grid-cols-1 lg:grid-cols-[1fr,0.9fr] gap-3">
-                        <div className="text-xs text-gray-300 bg-[#12182B] rounded p-2">
-                          <div className="font-semibold mb-1">Snippet</div>
-                          <div className="line-clamp-3">
-                            {transcript ? transcript.slice(0, 280) : "— No transcript available —"}
-                          </div>
-                        </div>
-
-                        <div className="bg-black/30 rounded p-2">
-                          {c.previewUrl ? (
-                            <video
-                              ref={(el) => (videoRefs.current[idx] = el)}
-                              src={c.previewUrl}
-                              controls
-                              className="w-full rounded"
-                              onLoadedMetadata={(ev) => {
-                                try {
-                                  ev.currentTarget.playbackRate = previewSpeed || 1;
-                                } catch {}
-                              }}
-                            />
-                          ) : (
-                            <div className="text-xs text-white/60 h-full grid place-items-center">
-                              No preview yet. Click Preview.
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+                    ) : (
+                      <div className="italic">No preview yet — click “Rebuild Preview”.</div>
+                    )}
+                  </div>
+                </div>
               </div>
+            ))}
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button onClick={addClip} disabled={clips.length>=5} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded disabled:opacity-50">
+                + Add Clip
+              </button>
+              <button onClick={clearAll} className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-2 rounded">Clear All</button>
+              <button onClick={exportZip} disabled={isBusy || clips.length===0} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded disabled:opacity-60">
+                Export All as ZIP
+              </button>
+            </div>
+
+            {!!clipMsg && <p className="text-green-400 text-sm mt-3">{clipMsg}</p>}
+            {!!error && <p className="text-red-400 text-sm mt-3">{error}</p>}
+          </div>
+
+          <div className="mt-10 text-center text-[10px] text-gray-500 select-none">
+            © {new Date().getFullYear()} ClipForge AI • Watermark: {watermark ? wmText : "off"}
+          </div>
+        </div>
+
+        {/* Right column: AI + Processing Log */}
+        <div className="space-y-6">
+          {/* AI Assistant */}
+          <div className="border border-[#27324A] bg-[#12182B] rounded-lg p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="font-semibold text-lg">🤖 ClipForge Assistant</div>
+              <div className="flex gap-2">
+                <button onClick={tplBestMoments} className="px-3 py-1.5 rounded bg-[#2B2F4A] hover:bg-[#3A3F63]">🎬 Moments</button>
+                <button onClick={tplTitles} className="px-3 py-1.5 rounded bg-[#2B2F4A] hover:bg-[#3A3F63]">✍️ Titles</button>
+                <button onClick={tplHooks} className="px-3 py-1.5 rounded bg-[#2B2F4A] hover:bg-[#3A3F63]">💬 Hooks</button>
+                <button onClick={tplHashtags} className="px-3 py-1.5 rounded bg-[#2B2F4A] hover:bg-[#3A3F63]">#️⃣ Hashtags</button>
+                <button onClick={tplSummarize} className="px-3 py-1.5 rounded bg-[#2B2F4A] hover:bg-[#3A3F63]">📝 Summary</button>
+              </div>
+            </div>
+
+            <div className="space-y-2 max-h-44 overflow-auto bg-black/20 rounded p-3">
+              {aiMsgs.length === 0 && (
+                <div className="text-white/60 text-sm">
+                  Ask ClipForge AI to summarize, propose titles, find moments, or write hooks.
+                </div>
+              )}
+              {aiMsgs.map((m, i) => (
+                <div key={i} className={`text-sm leading-6 ${m.role === 'assistant' ? 'text-white' : 'text-indigo-300'}`}>
+                  <span className="opacity-70 mr-1">{m.role === 'assistant' ? 'AI:' : 'You:'}</span>{m.content}
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-3 flex gap-2">
+              <textarea
+                value={aiInput}
+                onChange={e => setAiInput(e.target.value)}
+                placeholder="Ask something about your transcript…"
+                className="flex-1 bg-black/30 border border-white/10 rounded p-2 text-sm"
+                rows={2}
+              />
+              <button
+                onClick={() => { if (aiInput.trim()) { askAI(aiInput.trim()); setAiInput(""); } }}
+                disabled={aiBusy}
+                className="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 h-[42px] self-end"
+              >
+                {aiBusy ? "Thinking…" : "Ask AI"}
+              </button>
             </div>
           </div>
 
-          <div className="space-y-6">
-            <div className="border border-[#27324A] rounded-xl p-4 bg-[#12182B]">
-              <div className="flex items-center justify-between mb-3">
-                <div className="font-semibold text-lg flex items-center gap-2">🤖 AI Helper</div>
-                <div className="hidden md:flex gap-2">
-                  <button
-                    onClick={tplBestMoments}
-                    className="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
-                    disabled={aiBusy}
-                  >
-                    🎬 Best 3 Moments
-                  </button>
-                  <button
-                    onClick={tplTitles}
-                    className="px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50"
-                    disabled={aiBusy}
-                  >
-                    ✍️ Viral Titles
-                  </button>
-                  <button
-                    onClick={tplHooks}
-                    className="px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50"
-                    disabled={aiBusy}
-                  >
-                    💬 Hooks
-                  </button>
-                  <button
-                    onClick={tplHashtags}
-                    className="px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50"
-                    disabled={aiBusy}
-                  >
-                    #️⃣ Hashtags
-                  </button>
-                  <button
-                    onClick={tplSummarize}
-                    className="px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50"
-                    disabled={aiBusy}
-                  >
-                    📝 Summary
-                  </button>
-                </div>
-              </div>
-
-              <div className="space-y-2 max-h-56 overflow-auto bg-black/20 rounded p-3">
-                {aiMsgs.length === 0 && <div className="text-white/60 text-sm">Ask ClipForge AI to summarize, propose titles, find moments, or write hooks.</div>}
-                {aiMsgs.map((m, i) => (
-                  <div key={i} className={`text-sm leading-6 ${m.role === "assistant" ? "text-white" : "text-indigo-300"}`}>
-                    <span className="opacity-70 mr-1">{m.role === "assistant" ? "AI:" : "You:"}</span>
-                    {m.content}
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-3 flex gap-2">
-                <textarea
-                  value={aiInput}
-                  onChange={(e) => setAiInput(e.target.value)}
-                  placeholder="Ask something about your transcript…"
-                  className="flex-1 bg-black/30 border border-white/10 rounded p-2 text-sm"
-                  rows={2}
-                />
-                <button
-                  onClick={() => {
-                    if (aiInput.trim()) {
-                      askAI(aiInput.trim());
-                      setAiInput("");
-                    }
-                  }}
-                  disabled={aiBusy}
-                  className="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 h-[42px] self-end"
-                >
-                  {aiBusy ? "Thinking…" : "Ask AI"}
-                </button>
-              </div>
-
-              <div className="mt-3 grid grid-cols-2 gap-2 md:hidden">
-                <button onClick={tplBestMoments} className="px-3 py-2 rounded bg-indigo-600">
-                  🎬 Moments
-                </button>
-                <button onClick={tplTitles} className="px-3 py-2 rounded bg-slate-700">
-                  ✍️ Titles
-                </button>
-                <button onClick={tplHooks} className="px-3 py-2 rounded bg-slate-700">
-                  💬 Hooks
-                </button>
-                <button onClick={tplHashtags} className="px-3 py-2 rounded bg-slate-700">
-                  #️⃣ Hashtags
-                </button>
-                <button onClick={tplSummarize} className="px-3 py-2 rounded bg-slate-700 col-span-2">
-                  📝 Summary
-                </button>
-              </div>
-            </div>
-
-            <div className="text-xs text-white/60">
-              {notice && <div className="text-emerald-400 mb-1">{notice}</div>}
-              {error && <div className="text-red-400">{error}</div>}
-            </div>
-
-            <div className="text-center text-[10px] text-gray-500 select-none pt-2">
-              © {new Date().getFullYear()} ClipForge AI • Watermark: {watermarkOn ? wmText : "off"}
+          {/* Processing Log */}
+          <div className="border border-[#27324A] bg-[#12182B] rounded-lg p-4">
+            <div className="font-semibold text-lg mb-2">⚙️ Processing Log</div>
+            <div ref={logRef} className="text-xs bg-black/20 rounded p-3 h-56 overflow-auto whitespace-pre-wrap leading-6">
+              {log.length === 0 ? (
+                <span className="opacity-60">Actions and status messages will appear here.</span>
+              ) : log.join("\n")}
             </div>
           </div>
         </div>
