@@ -1,81 +1,36 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+// src/Clipper.jsx
+import React, { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient";
-import logo from "./assets/react.svg";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "https://clipper-api-final-1.onrender.com";
-const VIDEO_DURATION_FALLBACK = 300; // seconds, just for the timeline bar
+const VIDEO_DURATION = 300;
 
-// ---------- Small helpers ----------
 function timeToSeconds(t) {
   if (!t) return 0;
   const p = t.split(":").map(Number);
-  if (p.length === 3) return p[0] * 3600 + p[1] * 60 + p[2];
-  if (p.length === 2) return p[0] * 60 + p[1];
+  if (p.length === 3) return p[0]*3600 + p[1]*60 + p[2];
+  if (p.length === 2) return p[0]*60 + p[1];
   return Number(t) || 0;
-}
-function downloadBlob(blob, filename) {
-  const u = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = u;
-  a.download = filename || "download.bin";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(u);
-}
-function fileBase(name) {
-  return (name || "video").replace(/\.[^.]+$/, "");
-}
-
-// ---------- Modal ----------
-function Modal({ open, title, children, onClose }) {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-      <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#0B1020] p-5 shadow-2xl">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-white">{title}</h3>
-          <button
-            onClick={onClose}
-            className="rounded-md bg-white/10 px-2 py-1 text-sm text-white hover:bg-white/20"
-            aria-label="Close"
-          >
-            ✕
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-// ---------- Right-side Assistant Buttons ----------
-function AssistantButtons({ onClick }) {
-  const defs = [
-    { k: "moments", label: "Moments", emoji: "🎬" },
-    { k: "titles", label: "Titles", emoji: "📝" },
-    { k: "hooks", label: "Hooks", emoji: "💬" },
-    { k: "hashtags", label: "Hashtags", emoji: "🏷️" },
-    { k: "summary", label: "Summary", emoji: "🧠" },
-  ];
-  return (
-    <div className="mb-3 flex flex-wrap gap-2">
-      {defs.map((d) => (
-        <button
-          key={d.k}
-          onClick={() => onClick(d.k)}
-          className="rounded-md bg-[#151B33] px-3 py-1.5 text-sm text-white hover:bg-[#1B2240] border border-white/10"
-        >
-          <span className="mr-1">{d.emoji}</span>
-          {d.label}
-        </button>
-      ))}
-    </div>
-  );
 }
 
 export default function Clipper() {
-  // ---------- Auth guard ----------
+  const [mode, setMode] = useState("clip"); // default to clip screen
+  const [file, setFile] = useState(null);
+  const [isBusy, setIsBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [clipMsg, setClipMsg] = useState("");
+
+  const [clips, setClips] = useState([{ start: "00:00:00", end: "00:00:10" }]);
+
+  // preview list state (results returned from backend)
+  const [previews, setPreviews] = useState([]); // [{id,url,finalUrl?,start,end,createdAt}]
+
+  // watermark & speed controls
+  const [watermark, setWatermark] = useState(true);
+  const [wmText, setWmText] = useState("@ClipForge");
+  const [preview480, setPreview480] = useState(true);   // we want preview files
+  const [final1080, setFinal1080] = useState(false);    // optional — user can toggle if needed
+
   useEffect(() => {
     (async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -83,680 +38,336 @@ export default function Clipper() {
     })();
   }, []);
 
-  // ---------- Top-level UI state ----------
-  const [mode, setMode] = useState("transcribe"); // 'transcribe' | 'auto' | 'clip'
-  const [file, setFile] = useState(null);
-  const [url, setUrl] = useState("");
-  const [transcript, setTranscript] = useState("");
-  const [isBusy, setIsBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [log, setLog] = useState([]); // processing log entries
-  const [instant, setInstant] = useState(true); // fast stream-copy when possible
-  const [previewSpeed, setPreviewSpeed] = useState(1);
+  const resetMessages = () => { setError(""); setClipMsg(""); };
 
-  // watermark controls
-  const [wmOn, setWmOn] = useState(true);
-  const [wmText, setWmText] = useState("@ClippedBySal");
-
-  // clips state
-  const [clips, setClips] = useState([
-    { start: "00:00:00", end: "00:00:10", previewUrl: "", summary: "" },
-  ]);
-
-  // auto-clip modal
-  const [autoClipsModalOpen, setAutoClipsModalOpen] = useState(false);
-  const pendingAutoClipsRef = useRef([]); // store suggested clips waiting for user confirmation
-
-  // assistant chat
-  const [aiMsgs, setAiMsgs] = useState([]);
-  const [aiInput, setAiInput] = useState("");
-  const [aiBusy, setAiBusy] = useState(false);
-
-  const timelineTotal = useMemo(
-    () => (clips.length ? Math.max(...clips.map(c => timeToSeconds(c.end))) || VIDEO_DURATION_FALLBACK : VIDEO_DURATION_FALLBACK),
-    [clips]
-  );
-
-  const resetFlash = () => {
-    setError("");
-  };
-  const pushLog = (s) => {
-    setLog((l) => [...l, `${new Date().toLocaleTimeString()}  •  ${s}`].slice(-100));
-  };
-
-  // ---------- API calls ----------
-  async function callTranscribe() {
-    resetFlash();
-    if (!file && !url.trim()) {
-      setError("Choose a file or paste a URL.");
-      return null;
-    }
-    setIsBusy(true);
-    try {
-      pushLog("Uploading for transcription...");
-      const fd = new FormData();
-      if (url.trim()) fd.append("url", url.trim());
-      else fd.append("file", file);
-      const res = await fetch(`${API_BASE}/transcribe`, { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Transcription failed");
-      setTranscript(data.text || "");
-      pushLog("Transcription complete.");
-      return data.text || "";
-    } catch (e) {
-      setError(e.message);
-      pushLog(`Transcription error: ${e.message}`);
-      return null;
-    } finally {
-      setIsBusy(false);
-    }
-  }
-
-  async function callAutoClip(text, max = 3) {
-    resetFlash();
-    setIsBusy(true);
-    try {
-      pushLog("Finding best moments...");
-      const fd = new FormData();
-      fd.append("transcript", text || transcript);
-      fd.append("max_clips", String(max));
-      const res = await fetch(`${API_BASE}/auto_clip`, { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Auto-clip failed");
-      const list = Array.isArray(data.clips) ? data.clips : [];
-      pushLog(list.length ? `Found ${list.length} moments.` : "No strong moments found.");
-      return list;
-    } catch (e) {
-      setError(e.message);
-      pushLog(`Auto-clip error: ${e.message}`);
-      return [];
-    } finally {
-      setIsBusy(false);
-    }
-  }
-
-  // Build a (low-res) preview by calling /clip
-  async function buildPreview(i) {
-    const c = clips[i];
-    if (!file || !c?.start || !c?.end) {
-      setError("Select a video and set start & end times.");
-      return;
-    }
-    try {
-      setClips((arr) => {
-        const n = [...arr];
-        n[i].previewUrl = "loading";
-        return n;
-      });
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("start", c.start.trim());
-      fd.append("end", c.end.trim());
-      // fast path + watermark flags
-      fd.append("fast", instant ? "1" : "0");
-      fd.append("watermark", wmOn ? "1" : "0");
-      fd.append("wm_text", wmText);
-      // preview hint (backend may ignore, it’s fine)
-      fd.append("preview", "1");
-      fd.append("scale", "540p"); // <— low-res preview hint
-
-      const res = await fetch(`${API_BASE}/clip`, { method: "POST", body: fd });
-      if (!res.ok) throw new Error("Preview build failed");
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-
-      setClips((arr) => {
-        const n = [...arr];
-        n[i].previewUrl = url;
-        return n;
-      });
-      pushLog(`Preview ready for clip ${i + 1}.`);
-    } catch (e) {
-      setClips((arr) => {
-        const n = [...arr];
-        n[i].previewUrl = "";
-        return n;
-      });
-      setError(e.message);
-      pushLog(`Preview error: ${e.message}`);
-    }
-  }
-
-  // Download a high-quality clip (same call as preview, but user intends to save)
-  async function downloadClip(i) {
-    const c = clips[i];
-    if (!file || !c?.start || !c?.end) {
-      setError("Select a video and set start & end times.");
-      return;
-    }
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("start", c.start.trim());
-      fd.append("end", c.end.trim());
-      fd.append("fast", instant ? "1" : "0");
-      fd.append("watermark", wmOn ? "1" : "0");
-      fd.append("wm_text", wmText);
-
-      const res = await fetch(`${API_BASE}/clip`, { method: "POST", body: fd });
-      if (!res.ok) throw new Error("Clip export failed");
-      const blob = await res.blob();
-
-      const name = `${fileBase(file?.name)}_${c.start.replaceAll(":", "-")}-${c.end.replaceAll(":", "-")}.mp4`;
-      downloadBlob(blob, name);
-      pushLog(`Downloaded: ${name}`);
-    } catch (e) {
-      setError(e.message);
-      pushLog(`Download error: ${e.message}`);
-    }
-  }
-
-  async function downloadAllZip() {
-    if (!file || clips.length === 0) {
-      setError("Select a video and add clips.");
-      return;
-    }
-    try {
-      setIsBusy(true);
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("sections", JSON.stringify(clips.map(({ start, end }) => ({ start, end }))));
-      fd.append("watermark", wmOn ? "1" : "0");
-      fd.append("wm_text", wmText);
-      const res = await fetch(`${API_BASE}/clip_multi`, { method: "POST", body: fd });
-      const blob = await res.blob();
-      if (!res.ok) {
-        const t = await blob.text().catch(() => "");
-        throw new Error(t || "Multi-clip export failed");
-      }
-      downloadBlob(blob, "clips_bundle.zip");
-      pushLog("ZIP downloaded.");
-    } catch (e) {
-      setError(e.message);
-      pushLog(`ZIP error: ${e.message}`);
-    } finally {
-      setIsBusy(false);
-    }
-  }
-
-  // ---------- AI Assistant ----------
-  function tpl(k) {
-    switch (k) {
-      case "summary":
-        return "Summarize the transcript into 5 bullet points with key takeaways.";
-      case "titles":
-        return "Write 5 viral, punchy titles (max 60 chars each) based on this transcript.";
-      case "hooks":
-        return "Give me 7 short opening hooks (under 80 chars) tailored for Shorts/TikTok.";
-      case "hashtags":
-        return "Suggest 10 relevant hashtags + 10 SEO keywords for this content.";
-      case "moments":
-        return "Find the best 3 high-impact 10–45s moments with HH:MM:SS start/end and a one-line reason.";
-      default:
-        return "";
-    }
-  }
-  async function askAI(message) {
-    if (!message.trim()) return;
-    setAiBusy(true);
-    try {
-      const fd = new FormData();
-      fd.append("user_message", message.trim());
-      fd.append("transcript", transcript || "");
-      fd.append("history", JSON.stringify(aiMsgs));
-      const res = await fetch(`${API_BASE}/ai_chat`, { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "AI helper failed");
-      setAiMsgs((m) => [...m, { role: "user", content: message.trim() }, { role: "assistant", content: data.reply || "(no reply)" }]);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setAiBusy(false);
-    }
-  }
-  async function handleAssistantButton(k) {
-    if (!transcript && k !== "moments") {
-      setError("Transcribe first (or paste a URL) to use the assistant.");
-      return;
-    }
-    if (k === "moments") {
-      const list = await callAutoClip(transcript, 3);
-      if (!list.length) return;
-      // push readable reply, not altering clip list automatically here
-      const readable = list
-        .map((c, i) => `${i + 1}. ${c.start}–${c.end} — ${c.summary || ""}`)
-        .join("\n");
-      setAiMsgs((m) => [
-        ...m,
-        { role: "user", content: "Find the best 3 moments." },
-        { role: "assistant", content: readable || "(no moments)" },
-      ]);
-      return;
-    }
-    askAI(tpl(k));
-  }
-
-  // ---------- UI Handlers ----------
   function addClip() {
     if (clips.length >= 5) return;
-    setClips((arr) => [...arr, { start: "00:00:00", end: "00:00:10", previewUrl: "", summary: "" }]);
+    setClips([...clips, { start: "00:00:00", end: "00:00:10" }]);
   }
-  function updateClip(i, k, v) {
-    setClips((arr) => {
-      const n = [...arr];
-      n[i] = { ...n[i], [k]: v };
-      return n;
-    });
-  }
-  function deleteClip(i) {
-    setClips((arr) => arr.filter((_, idx) => idx !== i));
-  }
-  function clearAllClips() {
-    setClips([]);
+  function updateClip(i, k, v) { const n=[...clips]; n[i][k]=v; setClips(n); }
+  function cancelClip(i) { setClips(clips.filter((_, idx) => idx !== i)); }
+  function cancelAll() { setClips([]); setClipMsg(""); }
+
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    window.location.href = "/";
   }
 
-  // Top actions
-  async function onTranscribeClick() {
-    setMode("transcribe");
-    const text = await callTranscribe();
-    if (!text) return;
-    // don't show modal in pure transcribe
+  // -------- Helpers for preview list --------
+  function toAbs(url) {
+    // backend returns "/media/previews/....mp4" -> need absolute
+    if (!url) return null;
+    if (url.startsWith("http")) return url;
+    return `${API_BASE}${url}`;
   }
-  async function onAutoClipClick() {
-    setMode("auto");
-    const text = await callTranscribe();
-    if (!text) return;
-    const list = await callAutoClip(text, 3);
-    pendingAutoClipsRef.current = list || [];
-    // show modal to confirm loading the clips
-    setAutoClipsModalOpen(true);
+  function addPreviewItem({ preview_url, final_url, start, end }) {
+    const item = {
+      id: `${Date.now()}_${Math.random().toString(36).slice(2,7)}`,
+      url: toAbs(preview_url),
+      finalUrl: toAbs(final_url),
+      start, end,
+      createdAt: new Date().toISOString()
+    };
+    setPreviews(list => [item, ...list]);
   }
-  function onClipOnlyClick() {
-    setMode("clip");
-    // user will manually set times & build previews/exports
+  async function downloadURL(u, name) {
+    const res = await fetch(u);
+    const blob = await res.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name || "clip.mp4";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(a.href);
   }
 
-  function acceptAutoClipsAndBuild() {
-    const list = pendingAutoClipsRef.current || [];
-    if (!list.length) {
-      setAutoClipsModalOpen(false);
-      return;
+  // --------- Call /clip for a single card ---------
+  async function handleClipSingle(i) {
+    try {
+      resetMessages();
+      if (!file) return setError("Select a video first.");
+      const c = clips[i];
+      if (!c?.start || !c?.end) return setError("Enter start & end times.");
+      setIsBusy(true);
+
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("start", c.start.trim());
+      fd.append("end", c.end.trim());
+      fd.append("watermark", watermark ? "1" : "0");
+      fd.append("wm_text", wmText);
+      fd.append("preview_480", preview480 ? "1" : "0");
+      fd.append("final_1080", final1080 ? "1" : "0");
+
+      const res = await fetch(`${API_BASE}/clip`, { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || "Clip failed");
+
+      // push into preview list
+      addPreviewItem({
+        preview_url: data.preview_url,
+        final_url: data.final_url,
+        start: c.start, end: c.end
+      });
+
+      setClipMsg("✅ Preview ready below.");
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setIsBusy(false);
     }
-    setClips(
-      list.slice(0, 5).map((c) => ({
-        start: (c.start || "00:00:00").trim(),
-        end: (c.end || "00:00:10").trim(),
-        summary: (c.summary || "").trim(),
-        previewUrl: "",
-      }))
-    );
-    setAutoClipsModalOpen(false);
-    // auto-generate low-res previews for each
-    setTimeout(() => {
-      for (let i = 0; i < Math.min(5, list.length); i++) buildPreview(i);
-    }, 50);
   }
 
-  // ---------- Render ----------
+  // --------- Call /clip_multi and list all previews ---------
+  async function handleClipAll() {
+    try {
+      resetMessages();
+      if (!file) return setError("Select a video first.");
+      if (clips.length === 0) return setError("No clips added.");
+      setIsBusy(true);
+
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("sections", JSON.stringify(clips));
+      fd.append("watermark", watermark ? "1" : "0");
+      fd.append("wm_text", wmText);
+      fd.append("preview_480", preview480 ? "1" : "0");
+      fd.append("final_1080", final1080 ? "1" : "0");
+
+      const res = await fetch(`${API_BASE}/clip_multi`, { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok || !data.ok) throw new Error(data.error || "Multi-clip failed");
+
+      // Add each item to the list
+      (data.items || []).forEach(it => {
+        addPreviewItem({
+          preview_url: it.preview_url,
+          final_url: it.final_url,
+          start: it.start, end: it.end
+        });
+      });
+
+      setClipMsg("✅ All previews ready below.");
+      if (data.zip_url) {
+        // Optionally show a “Download All (ZIP)” toast/link if you enabled final_1080
+        console.log("ZIP ready:", toAbs(data.zip_url));
+      }
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#0B1020] via-[#12182B] to-[#1C2450] text-white">
       {/* Header */}
       <div className="border-b border-[#27324A] bg-[#0B1020]">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-3">
-            <img src={logo} alt="ClipForge AI" className="h-8 w-8" />
-            <div className="text-lg font-semibold tracking-wide">ClipForge AI</div>
-          </div>
-          <div className="flex items-center gap-4 text-sm">
+        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="text-lg font-semibold tracking-wide">ClipForge AI</div>
+          <div className="flex items-center gap-3 text-sm">
             <label className="flex items-center gap-2">
-              <input type="checkbox" checked={wmOn} onChange={(e) => setWmOn(e.target.checked)} />
+              <input type="checkbox" checked={watermark} onChange={e=>setWatermark(e.target.checked)} />
               Watermark
             </label>
-            {wmOn && (
+            {watermark && (
               <input
                 value={wmText}
-                onChange={(e) => setWmText(e.target.value)}
+                onChange={e=>setWmText(e.target.value)}
                 placeholder="@YourHandle"
-                className="w-40 rounded-md border border-[#27324A] bg-[#12182B] px-2 py-1 text-xs outline-none"
+                className="bg-[#12182B] border border-[#27324A] text-white text-xs rounded-md px-2 py-1 w-36 outline-none"
               />
             )}
-            <button
-              onClick={async () => {
-                await supabase.auth.signOut();
-                window.location.href = "/";
-              }}
-              className="rounded bg-[#6C5CE7] px-3 py-1 text-white hover:bg-[#5A4ED1]"
-            >
+            <button onClick={handleLogout} className="bg-[#6C5CE7] hover:bg-[#5A4ED1] px-3 py-1 rounded text-white">
               Logout
             </button>
           </div>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="mx-auto grid max-w-6xl grid-cols-1 gap-6 px-6 py-6 lg:grid-cols-[1fr,380px]">
-        {/* LEFT: Controls */}
-        <div>
-          {/* Upload row */}
-          <div className="mb-4 flex flex-wrap items-center gap-3">
-            <input
-              type="file"
-              accept="audio/*,video/*"
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
-              className="text-sm"
-            />
-            {file && <span className="text-xs text-white/70">Selected: {file.name}</span>}
-          </div>
-
-          {/* Mode buttons */}
-          <div className="mb-4 flex flex-wrap gap-2">
-            <button
-              onClick={onTranscribeClick}
-              disabled={isBusy}
-              className={`rounded-lg border px-4 py-2 ${
-                mode === "transcribe" ? "border-[#6C5CE7] bg-[#6C5CE7]" : "border-[#27324A] bg-[#12182B]"
-              }`}
-            >
-              Transcribe
-            </button>
-            <button
-              onClick={onAutoClipClick}
-              disabled={isBusy}
-              className={`rounded-lg border px-4 py-2 ${
-                mode === "auto" ? "border-[#6C5CE7] bg-[#6C5CE7]" : "border-[#27324A] bg-[#12182B]"
-              }`}
-            >
-              Auto Clip
-            </button>
-            <button
-              onClick={onClipOnlyClick}
-              disabled={isBusy}
-              className={`rounded-lg border px-4 py-2 ${
-                mode === "clip" ? "border-[#6C5CE7] bg-[#6C5CE7]" : "border-[#27324A] bg-[#12182B]"
-              }`}
-            >
-              Clip Only
-            </button>
-
-            {/* fast + preview speed */}
-            <label className="ml-auto flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={instant} onChange={(e) => setInstant(e.target.checked)} />
-              Instant clip (fast mode)
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              Preview speed
-              <select
-                value={previewSpeed}
-                onChange={(e) => setPreviewSpeed(Number(e.target.value))}
-                className="rounded-md border border-[#27324A] bg-[#12182B] px-2 py-1"
-              >
-                {[0.5, 0.75, 1, 1.25, 1.5, 2].map((v) => (
-                  <option key={v} value={v}>
-                    {v}×
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          {/* URL input */}
+      {/* Main */}
+      <div className="max-w-5xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left: Controls */}
+        <div className="lg:col-span-1">
           <div className="mb-4">
-            <input
-              type="url"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="Or paste a URL (YouTube/TikTok/MP3/MP4)…"
-              className="w-full rounded-lg border border-[#27324A] bg-[#12182B] px-3 py-2 text-sm"
-            />
-            <p className="mt-1 text-xs text-white/50">If a URL is provided, the file picker is ignored.</p>
+            <input type="file" accept="video/*" onChange={e=>setFile(e.target.files?.[0]||null)} />
+            {file && <p className="text-xs text-gray-400 mt-1">Selected: {file.name}</p>}
           </div>
 
-          {/* Big call-to-action (adapts to current mode) */}
-          <button
-            disabled={isBusy}
-            onClick={() => {
-              if (mode === "auto") return onAutoClipClick();
-              if (mode === " clip") return onClipOnlyClick();
-              return onTranscribeClick();
-            }}
-            className="mb-6 w-full rounded-lg bg-[#6C5CE7] py-2 text-white hover:bg-[#5A4ED1] disabled:opacity-60"
-          >
-            {mode === "auto" ? "Upload & Auto Clip" : mode === "clip" ? "Clip Actions" : "Upload & Transcribe"}
-          </button>
+          {/* tabs (only Clip shown, but keeping structure) */}
+          <div className="flex gap-2 mb-4">
+            <button
+              className={`px-4 py-2 rounded-lg border ${mode==="clip" ? "bg-[#6C5CE7] border-[#6C5CE7]" : "border-[#27324A] bg-[#12182B]"}`}
+              onClick={()=>setMode("clip")}
+            >
+              Clip
+            </button>
+          </div>
 
-          {/* Transcript */}
-          {!!transcript && (
-            <div className="mb-6 rounded-lg border border-[#27324A] bg-[#12182B] p-3">
-              <div className="mb-1 font-semibold">📝 Transcript</div>
-              <div className="max-h-60 whitespace-pre-wrap text-sm leading-6 text-white/90 scrollbar-thin">
-                {transcript}
+          {/* Options */}
+          <div className="flex items-center gap-4 mb-4 text-sm">
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={preview480} onChange={e=>setPreview480(e.target.checked)} />
+              Preview (480p)
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={final1080} onChange={e=>setFinal1080(e.target.checked)} />
+              Export (1080p)
+            </label>
+          </div>
+
+          {/* Clip cards (inputs) */}
+          <div className="space-y-3">
+            {clips.map((c, idx)=>(
+              <div key={idx} className="border border-[#27324A] rounded-lg p-3 bg-[#12182B]">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-medium text-sm text-white/80">🎬 Clip {idx+1}</h3>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={()=>handleClipSingle(idx)}
+                      disabled={isBusy || !file}
+                      className="text-xs bg-[#6C5CE7] hover:bg-[#5A4ED1] text-white px-3 py-1 rounded disabled:opacity-60"
+                    >
+                      Build Preview
+                    </button>
+                    <button
+                      onClick={()=>cancelClip(idx)}
+                      disabled={isBusy}
+                      className="text-xs bg-gray-500 hover:bg-gray-600 text-white px-2 py-1 rounded"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+
+                {/* inputs */}
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <input
+                    type="text"
+                    value={c.start}
+                    onChange={e=>updateClip(idx,"start",e.target.value)}
+                    placeholder="Start (HH:MM:SS)"
+                    className="rounded border border-[#27324A] bg-[#0B1020] text-sm px-2 py-1 text-white"
+                  />
+                  <input
+                    type="text"
+                    value={c.end}
+                    onChange={e=>updateClip(idx,"end",e.target.value)}
+                    placeholder="End (HH:MM:SS)"
+                    className="rounded border border-[#27324A] bg-[#0B1020] text-sm px-2 py-1 text-white"
+                  />
+                </div>
+
+                {/* progress bar (static visual) */}
+                <div className="relative h-2 bg-[#27324A] rounded-full overflow-hidden mb-2">
+                  {(() => {
+                    const s = timeToSeconds(c.start);
+                    const e = timeToSeconds(c.end);
+                    const total = VIDEO_DURATION;
+                    const sp = Math.min((s/total)*100, 100);
+                    const ep = Math.min((e/total)*100, 100);
+                    const w = Math.max(ep - sp, 2);
+                    return <div className="absolute h-full bg-[#6C5CE7]" style={{ left:`${sp}%`, width:`${w}%` }} />;
+                  })()}
+                </div>
+
+                <p className="text-xs text-gray-400 text-center">{c.start} → {c.end}</p>
               </div>
+            ))}
+
+            <div className="flex justify-between items-center">
+              <button onClick={addClip} disabled={clips.length>=5} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded disabled:opacity-50">
+                + Add Clip
+              </button>
+              <button onClick={handleClipAll} disabled={isBusy || !file || clips.length===0} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded">
+                Build All Previews
+              </button>
+            </div>
+
+            {!!clipMsg && <p className="text-emerald-400 text-sm mt-2">{clipMsg}</p>}
+            {!!error && <p className="text-red-400 text-sm mt-1">{error}</p>}
+          </div>
+        </div>
+
+        {/* Right: Preview list (Medium Cards) */}
+        <div className="lg:col-span-2">
+          <h3 className="text-lg font-semibold mb-3">Previews</h3>
+
+          {previews.length === 0 && (
+            <div className="border border-dashed border-[#27324A] rounded-xl p-6 text-center text-white/70">
+              No previews yet. Build one with **Build Preview** or **Build All Previews**.
             </div>
           )}
 
-          {/* Clips List */}
-          <div className="rounded-lg border border-[#27324A] bg-[#12182B] p-3">
-            <div className="mb-2 flex items-center justify-between">
-              <div className="text-lg font-semibold">Clips</div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={addClip}
-                  className="rounded bg-emerald-600 px-3 py-1.5 text-white hover:bg-emerald-700"
-                >
-                  + Add Clip
-                </button>
-                <button onClick={clearAllClips} className="rounded bg-gray-600 px-3 py-1.5 text-white hover:bg-gray-700">
-                  Clear All
-                </button>
-                <button
-                  onClick={downloadAllZip}
-                  disabled={isBusy || clips.length === 0}
-                  className="rounded bg-indigo-600 px-3 py-1.5 text-white hover:bg-indigo-700 disabled:opacity-50"
-                >
-                  Export All as ZIP
-                </button>
+          <div className="space-y-4 max-h-[70vh] overflow-auto pr-1">
+            {previews.map((p) => (
+              <div key={p.id} className="bg-[#12182B] border border-[#27324A] rounded-xl p-4">
+                <div className="flex gap-4 flex-col md:flex-row">
+                  {/* Video (no autoplay) */}
+                  <div className="md:w-2/3 w-full">
+                    <video
+                      src={p.url || ""}
+                      className="w-full rounded-lg border border-[#27324A]"
+                      controls
+                      preload="metadata"
+                    />
+                  </div>
+
+                  {/* Details + Actions */}
+                  <div className="md:w-1/3 w-full flex flex-col justify-between">
+                    <div>
+                      <div className="text-sm text-white/90 font-semibold mb-1">
+                        {p.start} → {p.end}
+                      </div>
+                      <div className="text-xs text-white/60">
+                        Created: {new Date(p.createdAt).toLocaleString()}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => {
+                          // replay from start – using the DOM video element
+                          const el = document.querySelector(`video[src="${p.url}"]`);
+                          if (el) { el.currentTime = 0; el.play(); }
+                        }}
+                        className="px-3 py-2 rounded bg-[#6C5CE7] hover:bg-[#5A4ED1] text-sm"
+                      >
+                        ▶️ Play
+                      </button>
+                      <button
+                        onClick={() => setPreviews(prev => prev.filter(x => x.id !== p.id))}
+                        className="px-3 py-2 rounded bg-[#2c334a] hover:bg-[#3a4160] text-sm"
+                      >
+                        🗑️ Delete
+                      </button>
+                      <button
+                        onClick={() => downloadURL(p.url, `clip_${p.start.replaceAll(':','-')}-${p.end.replaceAll(':','-')}_preview.mp4`)}
+                        className="col-span-2 px-3 py-2 rounded bg-emerald-600 hover:bg-emerald-700 text-sm"
+                      >
+                        ⬇️ Download Preview
+                      </button>
+
+                      {p.finalUrl && (
+                        <button
+                          onClick={() => downloadURL(p.finalUrl, `clip_${p.start.replaceAll(':','-')}-${p.end.replaceAll(':','-')}_1080.mp4`)}
+                          className="col-span-2 px-3 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-sm"
+                        >
+                          ⬇️ Download 1080p
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
-
-            {clips.map((c, idx) => {
-              const s = timeToSeconds(c.start);
-              const e = timeToSeconds(c.end);
-              const sp = Math.min((s / (timelineTotal || VIDEO_DURATION_FALLBACK)) * 100, 100);
-              const ep = Math.min((e / (timelineTotal || VIDEO_DURATION_FALLBACK)) * 100, 100);
-              const w = Math.max(ep - sp, 2);
-
-              return (
-                <div key={idx} className="mb-4 rounded-lg border border-white/10 bg-[#0F1426] p-3">
-                  <div className="mb-2 flex items-center justify-between">
-                    <div className="text-sm text-white/80">🎬 Clip {idx + 1}</div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => buildPreview(idx)}
-                        className="rounded bg-[#2B365E] px-3 py-1.5 text-sm text-white hover:bg-[#344070]"
-                      >
-                        Rebuild Preview
-                      </button>
-                      <button
-                        onClick={() => deleteClip(idx)}
-                        className="rounded bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="mb-3 grid grid-cols-2 gap-3">
-                    <input
-                      type="text"
-                      value={c.start}
-                      onChange={(e) => updateClip(idx, "start", e.target.value)}
-                      placeholder="Start (HH:MM:SS)"
-                      className="rounded border border-[#27324A] bg-[#0B1020] px-2 py-2 text-sm"
-                    />
-                    <input
-                      type="text"
-                      value={c.end}
-                      onChange={(e) => updateClip(idx, "end", e.target.value)}
-                      placeholder="End (HH:MM:SS)"
-                      className="rounded border border-[#27324A] bg-[#0B1020] px-2 py-2 text-sm"
-                    />
-                  </div>
-
-                  <div className="relative mb-2 h-2 rounded-full bg-[#27324A]">
-                    <div className="absolute h-2 rounded-full bg-[#6C5CE7]" style={{ left: `${sp}%`, width: `${w}%` }} />
-                  </div>
-                  <p className="mb-3 text-center text-xs text-white/60">
-                    {c.start} → {c.end}
-                  </p>
-
-                  {/* Snippet */}
-                  <div className="mb-3 rounded bg-[#0D1222] p-2 text-xs text-white/80">
-                    <div className="mb-1 font-semibold">Snippet</div>
-                    <div className="line-clamp-3">
-                      {transcript ? c.summary || transcript.slice(0, 240) : "— No transcript available —"}
-                    </div>
-                  </div>
-
-                  {/* Preview + Actions */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded border border-white/10 bg-black/20 p-2">
-                      <div className="mb-1 text-xs text-white/60">Preview</div>
-                      <div className="aspect-video w-full overflow-hidden rounded bg-black/60">
-                        {c.previewUrl === "loading" && (
-                          <div className="flex h-full w-full items-center justify-center text-white/60">Building…</div>
-                        )}
-                        {c.previewUrl && c.previewUrl !== "loading" && (
-                          <video
-                            src={c.previewUrl}
-                            controls
-                            playbackRate={previewSpeed}
-                            className="h-full w-full"
-                          />
-                        )}
-                        {!c.previewUrl && c.previewUrl !== "loading" && (
-                          <div className="flex h-full w-full items-center justify-center text-white/40">
-                            No preview yet
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col justify-between">
-                      <div className="space-y-2">
-                        <button
-                          onClick={() => buildPreview(idx)}
-                          className="w-full rounded bg-[#2B365E] px-3 py-2 text-sm text-white hover:bg-[#344070]"
-                        >
-                          Rebuild Preview (540p)
-                        </button>
-                        <button
-                          onClick={() => downloadClip(idx)}
-                          className="w-full rounded bg-emerald-600 px-3 py-2 text-sm text-white hover:bg-emerald-700"
-                        >
-                          Download Clip
-                        </button>
-                      </div>
-                      <p className="mt-3 text-[11px] text-white/50">
-                        Previews are low-res for speed. Final downloads use your selected settings.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+            ))}
           </div>
 
-          {/* errors */}
-          {!!error && <p className="mt-4 text-sm text-red-400">{error}</p>}
-        </div>
-
-        {/* RIGHT: Assistant + Log */}
-        <div className="space-y-6">
-          {/* Assistant */}
-          <div className="rounded-lg border border-[#27324A] bg-[#12182B] p-4">
-            <div className="mb-2 text-lg font-semibold">🤖 ClipForge Assistant</div>
-            <AssistantButtons onClick={handleAssistantButton} />
-            <textarea
-              value={aiInput}
-              onChange={(e) => setAiInput(e.target.value)}
-              placeholder="Ask something about your transcript…"
-              className="mb-2 w-full rounded-lg border border-[#27324A] bg-[#0B1020] p-2 text-sm"
-              rows={2}
-            />
-            <div className="mb-3 flex gap-2">
-              <button
-                onClick={() => {
-                  if (!aiInput.trim()) return;
-                  askAI(aiInput.trim());
-                  setAiInput("");
-                }}
-                disabled={aiBusy}
-                className="rounded bg-[#6C5CE7] px-3 py-2 text-white hover:bg-[#5A4ED1] disabled:opacity-60"
-              >
-                {aiBusy ? "Thinking…" : "Ask AI"}
-              </button>
-              <button
-                onClick={() => setAiMsgs([])}
-                className="rounded bg-white/10 px-3 py-2 text-white hover:bg-white/20"
-              >
-                Clear Chat
-              </button>
-            </div>
-            <div className="max-h-56 space-y-2 overflow-auto rounded bg-black/20 p-3 text-sm">
-              {aiMsgs.length === 0 && (
-                <div className="text-white/60">Ask me to summarize, find moments, write hooks or titles.</div>
-              )}
-              {aiMsgs.map((m, i) => (
-                <div
-                  key={i}
-                  className={m.role === "assistant" ? "text-white leading-6" : "text-indigo-300 leading-6"}
-                >
-                  <span className="mr-1 opacity-70">{m.role === "assistant" ? "AI:" : "You:"}</span>
-                  {m.content}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Processing log */}
-          <div className="rounded-lg border border-[#27324A] bg-[#12182B] p-4">
-            <div className="mb-2 text-lg font-semibold">🧾 Processing Log</div>
-            <div className="max-h-64 overflow-auto text-sm leading-7 text-white/85">
-              {log.length === 0 ? <div className="text-white/50">No logs yet.</div> : log.map((l, i) => <div key={i}>{l}</div>)}
-            </div>
+          <div className="mt-10 text-center text-[10px] text-gray-500 select-none">
+            © {new Date().getFullYear()} ClipForge AI • Watermark: {watermark ? wmText : "off"}
           </div>
         </div>
-      </div>
-
-      {/* Auto-Clip Confirmation Modal */}
-      <Modal
-        open={autoClipsModalOpen}
-        title="🚀 Boom! I found viral-worthy moments"
-        onClose={() => setAutoClipsModalOpen(false)}
-      >
-        <p className="mb-4 text-white/80">
-          I found up to <span className="font-semibold text-white">3</span> high-impact moments in your video.
-          Want me to load them so you can preview & download?
-        </p>
-        <div className="flex gap-2">
-          <button
-            onClick={acceptAutoClipsAndBuild}
-            className="rounded-lg bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700"
-          >
-            Load Clips
-          </button>
-          <button
-            onClick={() => setAutoClipsModalOpen(false)}
-            className="rounded-lg bg-white/10 px-4 py-2 text-white hover:bg-white/20"
-          >
-            Review Transcript First
-          </button>
-        </div>
-      </Modal>
-
-      {/* Footer */}
-      <div className="pb-10 pt-6 text-center text-[10px] text-white/40 select-none">
-        © {new Date().getFullYear()} ClipForge AI • Watermark: {wmOn ? wmText : "off"}
       </div>
     </div>
   );
