@@ -1,59 +1,86 @@
 // src/components/ClipCard.jsx
 import React from "react";
 
-export default function ClipCard({ idx, item, onDelete, onSave }) {
-  const { preview_url, start, end, durationLabel, filename } = item;
+export default function ClipCard({
+  index,
+  start,
+  end,
+  durationSec,
+  previewUrl,
+  finalUrl,
+  onPreview,
+  onDownload,
+  onTranscript,
+  onSave,
+  onDelete,
+}) {
+  const title = `Clip ${index !== null && index !== undefined ? index + 1 : ""}`.trim();
+  const thumb = previewUrl || finalUrl || "";
+
+  function fmtDur(s) {
+    if (!s && s !== 0) return "—";
+    const d = Math.max(0, Math.round(Number(s)));
+    const m = Math.floor(d/60);
+    const ss = (d % 60).toString().padStart(2,"0");
+    return `${m}:${ss}`;
+  }
 
   return (
-    <div className="border border-[#27324A] bg-[#12182B] rounded-lg p-3 mb-3">
-      <div className="flex items-center gap-3">
-        <video
-          src={preview_url}
-          className="w-40 h-24 rounded object-cover bg-black"
-          preload="metadata"
-          controls
-        />
-        <div className="flex-1">
-          <div className="text-white/90 text-sm font-semibold">
-            Clip {idx + 1} <span className="text-white/60">({start} → {end})</span>
-          </div>
-          <div className="text-xs text-white/60 mt-0.5">{durationLabel}</div>
+    <div className="border border-[#27324A] rounded-lg overflow-hidden bg-[#12182B]">
+      {/* Simple thumb */}
+      <div className="aspect-video bg-[#0B1020] flex items-center justify-center text-xs text-white/60">
+        {thumb ? (
+          <video
+            src={thumb}
+            className="w-full h-full object-cover"
+            muted
+            playsInline
+            preload="metadata"
+          />
+        ) : (
+          <span>No preview</span>
+        )}
+      </div>
 
-          <div className="mt-2 flex flex-wrap gap-2">
-            <a
-              className="text-xs bg-[#24304A] hover:bg-[#2c3b5c] px-2 py-1 rounded"
-              href={preview_url}
-              target="_blank"
-              rel="noreferrer"
-            >
+      <div className="p-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="font-semibold text-sm">{title || "Clip"}</div>
+          <div className="text-xs text-white/60">{fmtDur(durationSec)}</div>
+        </div>
+        <div className="text-[11px] text-white/60">{start} → {end}</div>
+
+        <div className="flex flex-wrap gap-2 pt-1">
+          {previewUrl && onPreview && (
+            <button onClick={()=>onPreview(previewUrl)} className="text-xs bg-[#24304A] hover:bg-[#2c3b5c] px-2 py-1 rounded">
               Preview
-            </a>
-            <a
+            </button>
+          )}
+          {(previewUrl || finalUrl) && onDownload && (
+            <button
+              onClick={()=>onDownload(previewUrl || finalUrl, start, end)}
               className="text-xs bg-[#24304A] hover:bg-[#2c3b5c] px-2 py-1 rounded"
-              href={preview_url}
-              download={filename || "clip.mp4"}
             >
               Download
-            </a>
+            </button>
+          )}
+          {onTranscript && (previewUrl || finalUrl) && (
             <button
+              onClick={()=>onTranscript(previewUrl || finalUrl)}
               className="text-xs bg-[#24304A] hover:bg-[#2c3b5c] px-2 py-1 rounded"
-              onClick={() => alert("Transcript for this clip: coming soon")}
             >
               Transcript
             </button>
-            <button
-              className="text-xs bg-emerald-600 hover:bg-emerald-700 px-2 py-1 rounded"
-              onClick={onSave}
-            >
+          )}
+          {onSave && (
+            <button onClick={onSave} className="text-xs bg-emerald-600 hover:bg-emerald-700 px-2 py-1 rounded">
               Save
             </button>
-            <button
-              className="text-xs bg-rose-600 hover:bg-rose-700 px-2 py-1 rounded"
-              onClick={onDelete}
-            >
+          )}
+          {onDelete && (
+            <button onClick={onDelete} className="text-xs bg-rose-600 hover:bg-rose-700 px-2 py-1 rounded">
               Delete
             </button>
-          </div>
+          )}
         </div>
       </div>
     </div>
