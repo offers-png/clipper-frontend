@@ -3,6 +3,13 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import AuthForm from "./AuthForm";
 import Clipper from "./Clipper";
 import ProtectedRoute from "./ProtectedRoute";
+// src/App.jsx
+import React from "react";
+import Clipper from "./Clipper";
+
+export default function App() {
+  return <Clipper />;
+}
 
 export default function App() {
   return (
