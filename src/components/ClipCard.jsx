@@ -8,80 +8,71 @@ export default function ClipCard({
   durationSec,
   previewUrl,
   finalUrl,
-  onPreview,
-  onDownload,
-  onTranscript,
-  onSave,
-  onDelete,
+  onPreview,      // () => void
+  onDownload,     // (url, start, end) => void
+  onTranscript,   // (url) => void
+  onSave,         // optional, Part 2
+  onDelete,       // optional, Part 2
 }) {
-  const title = `Clip ${index !== null && index !== undefined ? index + 1 : ""}`.trim();
-  const thumb = previewUrl || finalUrl || "";
-
-  function fmtDur(s) {
-    if (!s && s !== 0) return "—";
-    const d = Math.max(0, Math.round(Number(s)));
-    const m = Math.floor(d/60);
-    const ss = (d % 60).toString().padStart(2,"0");
-    return `${m}:${ss}`;
-  }
+  const duration =
+    typeof durationSec === "number" && durationSec > 0
+      ? `${Math.floor(durationSec)}s`
+      : (start && end) ? `${start} → ${end}` : "—";
 
   return (
-    <div className="border border-[#27324A] rounded-lg overflow-hidden bg-[#12182B]">
-      {/* Simple thumb */}
-      <div className="aspect-video bg-[#0B1020] flex items-center justify-center text-xs text-white/60">
-        {thumb ? (
-          <video
-            src={thumb}
-            className="w-full h-full object-cover"
-            muted
-            playsInline
-            preload="metadata"
-          />
-        ) : (
-          <span>No preview</span>
-        )}
+    <div className="border border-[#27324A] rounded-lg p-3 bg-[#12182B]">
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-sm font-semibold text-white/90">Clip {index + 1}</div>
+        <div className="text-xs text-gray-400">{duration}</div>
       </div>
 
-      <div className="p-3 space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="font-semibold text-sm">{title || "Clip"}</div>
-          <div className="text-xs text-white/60">{fmtDur(durationSec)}</div>
-        </div>
-        <div className="text-[11px] text-white/60">{start} → {end}</div>
+      {/* Thumbnail substitute */}
+      <div className="relative aspect-video bg-[#0B1020] rounded mb-3 flex items-center justify-center text-white/40 text-xs">
+        {previewUrl ? "Preview Ready" : "No Preview"}
+      </div>
 
-        <div className="flex flex-wrap gap-2 pt-1">
-          {previewUrl && onPreview && (
-            <button onClick={()=>onPreview(previewUrl)} className="text-xs bg-[#24304A] hover:bg-[#2c3b5c] px-2 py-1 rounded">
-              Preview
-            </button>
-          )}
-          {(previewUrl || finalUrl) && onDownload && (
-            <button
-              onClick={()=>onDownload(previewUrl || finalUrl, start, end)}
-              className="text-xs bg-[#24304A] hover:bg-[#2c3b5c] px-2 py-1 rounded"
-            >
-              Download
-            </button>
-          )}
-          {onTranscript && (previewUrl || finalUrl) && (
-            <button
-              onClick={()=>onTranscript(previewUrl || finalUrl)}
-              className="text-xs bg-[#24304A] hover:bg-[#2c3b5c] px-2 py-1 rounded"
-            >
-              Transcript
-            </button>
-          )}
-          {onSave && (
-            <button onClick={onSave} className="text-xs bg-emerald-600 hover:bg-emerald-700 px-2 py-1 rounded">
-              Save
-            </button>
-          )}
-          {onDelete && (
-            <button onClick={onDelete} className="text-xs bg-rose-600 hover:bg-rose-700 px-2 py-1 rounded">
-              Delete
-            </button>
-          )}
-        </div>
+      <div className="flex flex-wrap gap-2 text-sm">
+        <button
+          onClick={onPreview}
+          disabled={!previewUrl}
+          className="px-3 py-1 rounded bg-[#6C5CE7] hover:bg-[#5A4ED1] disabled:opacity-50"
+        >
+          Preview
+        </button>
+
+        <button
+          onClick={() => onDownload(previewUrl || finalUrl, start, end)}
+          disabled={!previewUrl && !finalUrl}
+          className="px-3 py-1 rounded bg-[#24304A] hover:bg-[#2c3b5c] disabled:opacity-50"
+        >
+          Download
+        </button>
+
+        <button
+          onClick={() => onTranscript(previewUrl || finalUrl)}
+          disabled={!previewUrl && !finalUrl}
+          className="px-3 py-1 rounded bg-[#24304A] hover:bg-[#2c3b5c] disabled:opacity-50"
+        >
+          Transcript
+        </button>
+
+        <button
+          onClick={onSave}
+          disabled={!onSave}
+          className="px-3 py-1 rounded bg-[#24304A] hover:bg-[#2c3b5c] disabled:opacity-50"
+          title={onSave ? "" : "Coming in Part 2"}
+        >
+          Save
+        </button>
+
+        <button
+          onClick={onDelete}
+          disabled={!onDelete}
+          className="px-3 py-1 rounded bg-[#4B5563] hover:bg-[#6B7280] disabled:opacity-50"
+          title={onDelete ? "" : "Coming in Part 2"}
+        >
+          Delete
+        </button>
       </div>
     </div>
   );
