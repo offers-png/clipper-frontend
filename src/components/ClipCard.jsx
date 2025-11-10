@@ -1,79 +1,138 @@
 // src/components/ClipCard.jsx
-import React from "react";
+import React, { useState } from "react";
 
 export default function ClipCard({
   index,
   start,
   end,
   durationSec,
+  thumbUrl,
   previewUrl,
   finalUrl,
-  onPreview,      // () => void
-  onDownload,     // (url, start, end) => void
-  onTranscript,   // (url) => void
-  onSave,         // optional, Part 2
-  onDelete,       // optional, Part 2
+  onPreview,
+  onDownload,
+  onTranscript,
+  onSave,
+  onDelete,
 }) {
-  const duration =
-    typeof durationSec === "number" && durationSec > 0
-      ? `${Math.floor(durationSec)}s`
-      : (start && end) ? `${start} → ${end}` : "—";
+  const [open, setOpen] = useState(false);
 
   return (
-    <div className="border border-[#27324A] rounded-lg p-3 bg-[#12182B]">
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-sm font-semibold text-white/90">Clip {index + 1}</div>
-        <div className="text-xs text-gray-400">{duration}</div>
+    <>
+      <div className="bg-[#12182B] border border-[#27324A] rounded-lg p-3 text-white">
+        {/* Thumbnail + Duration */}
+        <div
+          className="relative cursor-pointer"
+          onClick={() => setOpen(true)}
+        >
+          {thumbUrl ? (
+            <img
+              src={thumbUrl}
+              alt="thumb"
+              className="w-full h-40 object-cover rounded"
+            />
+          ) : (
+            <div className="w-full h-40 bg-[#1C2539] flex items-center justify-center text-gray-400">
+              No Thumbnail
+            </div>
+          )}
+          <div className="absolute bottom-1 right-1 bg-black/70 text-xs px-2 py-0.5 rounded">
+            {durationSec ? `${durationSec.toFixed(1)}s` : ""}
+          </div>
+        </div>
+
+        {/* Info */}
+        <div className="mt-2 text-sm">
+          <div className="font-semibold">Clip {index + 1}</div>
+          <div className="text-gray-400 text-xs">
+            {start} → {end}
+          </div>
+        </div>
+
+        {/* Buttons */}
+        <div className="flex flex-wrap gap-2 mt-3 text-xs">
+          <button
+            onClick={() => setOpen(true)}
+            className="bg-indigo-600 hover:bg-indigo-700 px-2 py-1 rounded"
+          >
+            Preview
+          </button>
+
+          {previewUrl && (
+            <button
+              onClick={() => onDownload(previewUrl, start, end)}
+              className="bg-emerald-600 hover:bg-emerald-700 px-2 py-1 rounded"
+            >
+              Download
+            </button>
+          )}
+
+          {previewUrl && (
+            <button
+              onClick={() => onTranscript(previewUrl)}
+              className="bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded"
+            >
+              Transcript
+            </button>
+          )}
+
+          {onSave && (
+            <button
+              onClick={onSave}
+              className="bg-blue-600 hover:bg-blue-700 px-2 py-1 rounded"
+            >
+              Save
+            </button>
+          )}
+
+          {onDelete && (
+            <button
+              onClick={onDelete}
+              className="bg-red-600 hover:bg-red-700 px-2 py-1 rounded"
+            >
+              Delete
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Thumbnail substitute */}
-      <div className="relative aspect-video bg-[#0B1020] rounded mb-3 flex items-center justify-center text-white/40 text-xs">
-        {previewUrl ? "Preview Ready" : "No Preview"}
-      </div>
-
-      <div className="flex flex-wrap gap-2 text-sm">
-        <button
-          onClick={onPreview}
-          disabled={!previewUrl}
-          className="px-3 py-1 rounded bg-[#6C5CE7] hover:bg-[#5A4ED1] disabled:opacity-50"
+      {/* Modal */}
+      {open && (
+        <div
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
+          onClick={() => setOpen(false)}
         >
-          Preview
-        </button>
+          <div
+            className="bg-[#0B1020] p-3 rounded-lg max-w-xl w-full shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-2">
+              <div className="font-semibold text-sm">
+                Clip {index + 1} Preview
+              </div>
+              <button
+                className="text-gray-300 hover:text-white"
+                onClick={() => setOpen(false)}
+              >
+                ✕
+              </button>
+            </div>
 
-        <button
-          onClick={() => onDownload(previewUrl || finalUrl, start, end)}
-          disabled={!previewUrl && !finalUrl}
-          className="px-3 py-1 rounded bg-[#24304A] hover:bg-[#2c3b5c] disabled:opacity-50"
-        >
-          Download
-        </button>
-
-        <button
-          onClick={() => onTranscript(previewUrl || finalUrl)}
-          disabled={!previewUrl && !finalUrl}
-          className="px-3 py-1 rounded bg-[#24304A] hover:bg-[#2c3b5c] disabled:opacity-50"
-        >
-          Transcript
-        </button>
-
-        <button
-          onClick={onSave}
-          disabled={!onSave}
-          className="px-3 py-1 rounded bg-[#24304A] hover:bg-[#2c3b5c] disabled:opacity-50"
-          title={onSave ? "" : "Coming in Part 2"}
-        >
-          Save
-        </button>
-
-        <button
-          onClick={onDelete}
-          disabled={!onDelete}
-          className="px-3 py-1 rounded bg-[#4B5563] hover:bg-[#6B7280] disabled:opacity-50"
-          title={onDelete ? "" : "Coming in Part 2"}
-        >
-          Delete
-        </button>
-      </div>
-    </div>
+            {previewUrl ? (
+              <video
+                src={previewUrl}
+                controls
+                autoPlay
+                className="w-full rounded"
+              />
+            ) : (
+              <div className="text-gray-400 text-center py-8">
+                No preview available
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
