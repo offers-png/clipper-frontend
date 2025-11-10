@@ -1,30 +1,23 @@
-import React from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import AuthForm from "./AuthForm";
-import Clipper from "./Clipper";
-import ProtectedRoute from "./ProtectedRoute";
 // src/App.jsx
 import React from "react";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Clipper from "./Clipper";
-
-export default function App() {
-  return <Clipper />;
-}
+import Login from "./Login";
+import ProtectedRoute from "./ProtectedRoute";
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<AuthForm />} />
         <Route
-          path="/clipper"
+          path="/"
           element={
             <ProtectedRoute>
               <Clipper />
             </ProtectedRoute>
           }
         />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="/login" element={<Login />} />
       </Routes>
     </BrowserRouter>
   );
