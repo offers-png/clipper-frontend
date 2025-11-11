@@ -1,58 +1,39 @@
-import React, { useState } from "react"
-import { supabase } from "./supabaseClient"
+import React, { useState } from "react";
+import { supabase } from "./supabaseClient";
 
-export default function AuthForm() {
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
+export default function Login() {
+  const [email, setEmail] = useState("");
+  const [msg, setMsg] = useState("");
 
-  const handleSignup = async () => {
-    const { data, error } = await supabase.auth.signUp({
+  const signIn = async (e) => {
+    e.preventDefault();
+    setMsg("Sending magic link…");
+    const { error } = await supabase.auth.signInWithOtp({
       email,
-      password,
-    })
-
-    if (error) {
-      console.error("Signup error:", error.message)
-      alert(error.message)
-    } else {
-      alert("Signup successful! Check your email to confirm.")
-      console.log("Data:", data)
-    }
-  }
-
-  const handleLogin = async () => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
-
-    if (error) {
-      console.error("Login error:", error.message)
-      alert(error.message)
-    } else {
-  alert("Login successful!");
-  console.log("Data:", data);
-  window.location.href = "/clipper";  // redirect to Clipper page
-}
-  }
+      options: { emailRedirectTo: window.location.origin + "/" },
+    });
+    if (error) setMsg(error.message);
+    else setMsg("Check your email for the link.");
+  };
 
   return (
-    <div>
-      <h2>Sign In to Clipper Studio</h2>
-      <input
-        type="email"
-        placeholder="Email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
-      <input
-        type="password"
-        placeholder="Password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
-      <button onClick={handleLogin}>Login</button>
-      <button onClick={handleSignup}>Sign Up</button>
+    <div style={{maxWidth: 420, margin: "80px auto", padding: 24, border: "1px solid #333", borderRadius: 12}}>
+      <h2>Sign in</h2>
+      <p style={{opacity:.7}}>Enter your email to get a magic link.</p>
+      <form onSubmit={signIn} style={{marginTop: 16}}>
+        <input
+          type="email"
+          placeholder="you@example.com"
+          value={email}
+          onChange={e=>setEmail(e.target.value)}
+          required
+          style={{width: "100%", padding: 10, borderRadius: 8, border: "1px solid #444"}}
+        />
+        <button type="submit" style={{marginTop: 12, width:"100%", padding: 10, borderRadius: 8, background:"#6C5CE7", color:"#fff", border:0}}>
+          Send Link
+        </button>
+      </form>
+      {!!msg && <p style={{marginTop: 10}}>{msg}</p>}
     </div>
-  )
+  );
 }
