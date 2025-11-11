@@ -1,20 +1,27 @@
-import React, { useEffect, useState } from "react";
-import { Navigate } from "react-router-dom";
-import { supabase } from "./supabaseClient";
+// src/App.jsx
+import React from "react";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import Clipper from "./Clipper";
+import ProtectedRoute from "./ProtectedRoute";
+import LoginPage from "./LoginPage";
 
-export default function ProtectedRoute({ children }) {
-  const [loading, setLoading] = useState(true);
-  const [ok, setOk] = useState(false);
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        {/* Public Route */}
+        <Route path="/" element={<LoginPage />} />
 
-  useEffect(() => {
-    (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setOk(!!session);
-      setLoading(false);
-    })();
-  }, []);
-
-  if (loading) return <div style={{padding: 24}}>Checking session…</div>;
-  if (!ok) return <Navigate to="/login" replace />;
-  return children;
+        {/* Protected Route */}
+        <Route
+          path="/app"
+          element={
+            <ProtectedRoute>
+              <Clipper />
+            </ProtectedRoute>
+          }
+        />
+      </Routes>
+    </BrowserRouter>
+  );
 }
