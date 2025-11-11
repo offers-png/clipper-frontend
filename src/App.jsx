@@ -1,16 +1,26 @@
 // src/App.jsx
 import React from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Clipper from "./Clipper";
+import ProtectedRoute from "./ProtectedRoute";
+import LoginPage from "./LoginPage";
 
-// If you already have auth routing, keep it. For now we render Clipper.
-// Replace with your ProtectedRoute if you want to gate it.
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Clipper />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        {/* Public Route */}
+        <Route path="/" element={<LoginPage />} />
+
+        {/* Protected Route */}
+        <Route
+          path="/app"
+          element={
+            <ProtectedRoute>
+              <Clipper />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </BrowserRouter>
   );
