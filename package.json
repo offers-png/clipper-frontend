@@ -7,6 +7,12 @@
     "build": "vite build",
     "preview": "vite preview --port 4173"
   },
+ "devDependencies": {
+  "tailwindcss": "^3.4.14",
+  "postcss": "^8.4.31",
+  "autoprefixer": "^10.4.20"
+}
+
   "dependencies": {
     "@supabase/supabase-js": "2.45.4",
     "react": "18.3.1",
