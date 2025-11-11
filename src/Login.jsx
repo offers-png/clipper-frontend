@@ -1,39 +1,63 @@
+// src/LoginPage.jsx
 import React, { useState } from "react";
 import { supabase } from "./supabaseClient";
 
-export default function Login() {
+export default function LoginPage() {
   const [email, setEmail] = useState("");
-  const [msg, setMsg] = useState("");
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState("");
 
-  const signIn = async (e) => {
+  async function handleLogin(e) {
     e.preventDefault();
-    setMsg("Sending magic link…");
+    setError("");
+
+    if (!email.trim()) {
+      setError("Enter your email.");
+      return;
+    }
+
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: window.location.origin + "/" },
+      options: { emailRedirectTo: window.location.origin + "/app" },
     });
-    if (error) setMsg(error.message);
-    else setMsg("Check your email for the link.");
-  };
+
+    if (error) setError(error.message);
+    else setSent(true);
+  }
 
   return (
-    <div style={{maxWidth: 420, margin: "80px auto", padding: 24, border: "1px solid #333", borderRadius: 12}}>
-      <h2>Sign in</h2>
-      <p style={{opacity:.7}}>Enter your email to get a magic link.</p>
-      <form onSubmit={signIn} style={{marginTop: 16}}>
-        <input
-          type="email"
-          placeholder="you@example.com"
-          value={email}
-          onChange={e=>setEmail(e.target.value)}
-          required
-          style={{width: "100%", padding: 10, borderRadius: 8, border: "1px solid #444"}}
-        />
-        <button type="submit" style={{marginTop: 12, width:"100%", padding: 10, borderRadius: 8, background:"#6C5CE7", color:"#fff", border:0}}>
-          Send Link
-        </button>
-      </form>
-      {!!msg && <p style={{marginTop: 10}}>{msg}</p>}
+    <div className="min-h-screen flex items-center justify-center bg-[#0B1020] text-white px-4">
+      <div className="w-full max-w-md bg-[#12182B] p-8 rounded-xl border border-[#27324A] shadow-xl">
+        <h1 className="text-2xl font-semibold mb-6 text-center">ClipForge AI</h1>
+
+        {sent ? (
+          <p className="text-center text-green-400 text-sm">
+            ✅ Magic link sent! Check your email to continue.
+          </p>
+        ) : (
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-sm mb-1">Email</label>
+              <input
+                type="email"
+                className="w-full bg-[#0B1020] border border-[#27324A] rounded px-3 py-2 text-white"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+
+            {error && <p className="text-red-400 text-xs">{error}</p>}
+
+            <button
+              type="submit"
+              className="w-full bg-[#6C5CE7] hover:bg-[#5A4ED1] text-white rounded-lg py-2"
+            >
+              Send Magic Link
+            </button>
+          </form>
+        )}
+      </div>
     </div>
   );
 }
