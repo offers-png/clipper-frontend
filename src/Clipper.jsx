@@ -1,8 +1,6 @@
-// src/Clipper.jsx — B2 Pro Studio layout (works today, no DB required)
+// src/Clipper.jsx — Clean Part 1 with modal previews + working AI calls
 import React, { useEffect, useState, useRef } from "react";
 import { supabase } from "./supabaseClient";
-import logo from "./assets/react.svg";
-import ClipCard from "./components/ClipCard";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "https://clipper-api-final-1.onrender.com";
 const VIDEO_DURATION = 300;
@@ -19,12 +17,11 @@ export default function Clipper() {
   useEffect(() => {
     (async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) window.location.href = "/";
+      if (!session) window.location.href = "/login";
     })();
   }, []);
 
-  // Left column state
-  const [mode, setMode] = useState("clip"); // default to Clip
+  const [mode, setMode] = useState("transcribe");
   const [file, setFile] = useState(null);
   const [url, setUrl] = useState("");
   const [transcript, setTranscript] = useState("");
@@ -35,9 +32,9 @@ export default function Clipper() {
   const [clips, setClips] = useState([{ start: "00:00:00", end: "00:00:10", summary: "" }]);
   const [watermarkOn, setWatermarkOn] = useState(true);
   const [wmText, setWmText] = useState("@ClippedBySal");
+  const [fastMode, setFastMode] = useState(true);
   const [previewSpeed, setPreviewSpeed] = useState(1);
 
-  // Right column (AI)
   const [aiOpen, setAiOpen] = useState(true);
   const [aiMsgs, setAiMsgs] = useState([]);
   const [aiInput, setAiInput] = useState("");
@@ -45,34 +42,23 @@ export default function Clipper() {
   const aiBottomRef = useRef(null);
   useEffect(() => { aiBottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [aiMsgs]);
 
-  // Copy button
   const [copied, setCopied] = useState(false);
-
-  // Generated from /clip_multi
-  const [generated, setGenerated] = useState([]); // [{preview_url, final_url, start,end}]
-  // Local “Saved” (works today without DB)
-  const [saved, setSaved] = useState(() => {
-    try { return JSON.parse(localStorage.getItem("clipforge_saved") || "[]"); } catch { return []; }
-  });
-  useEffect(() => {
-    localStorage.setItem("clipforge_saved", JSON.stringify(saved || []));
-  }, [saved]);
+  const [generated, setGenerated] = useState([]); // items from /clip_multi
 
   const resetMessages = () => { setError(""); setClipMsg(""); };
 
   async function handleLogout() {
     await supabase.auth.signOut();
-    window.location.href = "/";
+    window.location.href = "/login";
   }
 
-  // ---------- Transcribe ----------
+  // --- Transcribe (file or URL)
   async function handleTranscribe() {
     try {
       resetMessages(); setIsBusy(true);
       const fd = new FormData();
-      if (url.trim()) {
-        fd.append("url", url.trim());
-      } else {
+      if (url.trim()) fd.append("url", url.trim());
+      else {
         if (!file) { setError("Choose a file or paste a URL."); setIsBusy(false); return; }
         fd.append("file", file);
       }
@@ -80,12 +66,15 @@ export default function Clipper() {
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || "Transcription failed");
       setTranscript(data.text || "(no text)");
-      setAiMsgs(m => [...m, { role: "assistant", content: "📝 Transcript ready. Try: Moments, Titles, Hooks, Hashtags." }]);
-    } catch (e) { setError(e.message); }
-    finally { setIsBusy(false); }
+      setAiMsgs(m => [...m, { role: "assistant", content: "📝 Transcript is ready. Ask for titles, hooks, or best moments." }]);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setIsBusy(false);
+    }
   }
 
-  // ---------- Clip helpers ----------
+  // --- Multi-clip
   function addClip() {
     if (clips.length >= 5) return;
     setClips([...clips, { start: "00:00:00", end: "00:00:10", summary: "" }]);
@@ -99,12 +88,10 @@ export default function Clipper() {
     return `${base}_${start.replaceAll(":","-")}-${end.replaceAll(":","-")}.mp4`;
   }
   function downloadUrl(url, filename) {
+    if (!url) return;
     const a = document.createElement("a");
-    a.href = url;
-    a.download = filename || "clip.mp4";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    a.href = url; a.download = filename || "clip.mp4";
+    document.body.appendChild(a); a.click(); a.remove();
   }
 
   async function handleClipAll() {
@@ -127,23 +114,16 @@ export default function Clipper() {
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || "Multi-clip failed");
 
-      const items = Array.isArray(data.items) ? data.items : [];
-      // compute duration for each, fallback
-      const withDur = items.map(it => {
-        const s = timeToSeconds(it.start || "0");
-        const e = timeToSeconds(it.end || "0");
-        return { ...it, duration_sec: Math.max(0, e - s) };
-      });
-      setGenerated(withDur);
-      setClipMsg("✅ Clips ready below.");
+      setGenerated(Array.isArray(data.items) ? data.items : []);
+      setClipMsg("✅ All clips processed.");
     } catch (e) { setError(e.message); }
     finally { setIsBusy(false); }
   }
 
-  // Transcript for a single generated clip (by URL)
+  // --- Transcript for a single generated clip (by URL)
   async function transcribeClipByUrl(clipUrl) {
     try {
-      if (!clipUrl) throw new Error("No clip URL.");
+      if (!clipUrl) throw new Error("No clip URL provided.");
       setIsBusy(true);
       const fd = new FormData();
       fd.append("url", clipUrl);
@@ -151,23 +131,15 @@ export default function Clipper() {
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || "Transcription failed");
       setTranscript(data.text || "(no text)");
-      setClipMsg("📝 Clip transcript is in the transcript panel.");
-    } catch (e) { setError(e.message); }
-    finally { setIsBusy(false); }
+      setClipMsg("📝 Clip transcript loaded (see transcript panel).");
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setIsBusy(false);
+    }
   }
 
-  // Local save / delete (works today without DB)
-  function saveClip(g) {
-    const key = `${g.preview_url || g.final_url}|${g.start}|${g.end}`;
-    if ((saved || []).some(x => x._key === key)) return;
-    const row = { ...g, _key: key, saved_at: Date.now() };
-    setSaved([row, ...saved]);
-  }
-  function deleteSaved(key) {
-    setSaved((saved || []).filter(x => x._key !== key));
-  }
-
-  // ---------- AI helpers ----------
+  // --- AI helper
   async function askAI(message) {
     if (!message.trim()) return;
     try {
@@ -178,14 +150,17 @@ export default function Clipper() {
       fd.append("history", JSON.stringify(aiMsgs));
       const res = await fetch(`${API_BASE}/ai_chat`, { method: "POST", body: fd });
       const data = await res.json();
-      if (!res.ok || !data.ok) throw new Error(data.error || "AI failed");
+      if (!res.ok || !data.ok) throw new Error(data.error || "AI helper failed");
       setAiMsgs(m => [
         ...m,
         { role: "user", content: message },
         { role: "assistant", content: data.reply || "(no reply)" },
       ]);
-    } catch (e) { setError(e.message); }
-    finally { setAiBusy(false); }
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setAiBusy(false);
+    }
   }
 
   function tplSummarize() {
@@ -226,15 +201,18 @@ export default function Clipper() {
       } else {
         setAiMsgs(m => [...m, { role: "assistant", content: "I couldn't find clear moments. Try a different video or longer transcript." }]);
       }
-    } catch (e) { setError(e.message); }
-    finally { setAiBusy(false); }
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setAiBusy(false);
+    }
   }
 
   function TemplateBar() {
     return (
       <div className="flex flex-wrap gap-2">
-        <button onClick={tplBestMoments} disabled={aiBusy} className="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50">🎬 Moments</button>
-        <button onClick={tplTitles} disabled={aiBusy} className="px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50">✍️ Titles</button>
+        <button onClick={tplBestMoments} disabled={aiBusy} className="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50">🎬 Best 3 Moments</button>
+        <button onClick={tplTitles} disabled={aiBusy} className="px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50">✍️ Viral Titles</button>
         <button onClick={tplHooks} disabled={aiBusy} className="px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50">💬 Hooks</button>
         <button onClick={tplHashtags} disabled={aiBusy} className="px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50">#️⃣ Hashtags</button>
         <button onClick={tplSummarize} disabled={aiBusy} className="px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50">📝 Summary</button>
@@ -242,15 +220,15 @@ export default function Clipper() {
     );
   }
 
+  // lazy import to avoid build ordering issues
+  const ClipCard = React.useMemo(() => require("./ClipCard.jsx").default, []);
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#0B1020] via-[#12182B] to-[#1C2450] text-white">
       {/* Header */}
       <div className="border-b border-[#27324A] bg-[#0B1020] sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img src={logo} alt="ClipForge AI" className="h-8 w-8" />
-            <div className="text-lg font-semibold tracking-wide">ClipForge AI</div>
-          </div>
+          <div className="text-lg font-semibold tracking-wide">ClipForge AI</div>
           <div className="flex items-center gap-3 text-sm">
             <label className="flex items-center gap-2">
               <input type="checkbox" checked={watermarkOn} onChange={e=>setWatermarkOn(e.target.checked)} />
@@ -267,7 +245,6 @@ export default function Clipper() {
             <button
               onClick={()=>setAiOpen(v=>!v)}
               className="bg-[#24304A] hover:bg-[#2c3b5c] px-3 py-1 rounded"
-              title={aiOpen ? "Hide AI Assistant" : "Show AI Assistant"}
             >
               {aiOpen ? "Hide Assistant" : "Show Assistant"}
             </button>
@@ -278,8 +255,8 @@ export default function Clipper() {
         </div>
       </div>
 
-      {/* Main: B2 Two-column */}
-      <div className="max-w-7xl mx-auto px-6 py-6 grid grid-cols-1 md:grid-cols-[1fr_32rem] gap-6">
+      {/* Main */}
+      <div className="max-w-7xl mx-auto px-6 py-6 flex gap-6">
         {/* LEFT */}
         <div className="flex-1">
           {/* Tabs */}
@@ -294,11 +271,31 @@ export default function Clipper() {
             >Clip</button>
           </div>
 
+          {/* Speed row */}
+          <div className="flex flex-wrap items-center gap-6 mb-4 text-sm">
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={fastMode} onChange={e=>setFastMode(e.target.checked)} />
+              Instant clip (fast mode)
+            </label>
+            <label className="flex items-center gap-2">
+              Preview speed
+              <select
+                value={previewSpeed}
+                onChange={e=>setPreviewSpeed(Number(e.target.value))}
+                className="bg-[#12182B] border border-[#27324A] rounded-md px-2 py-1"
+              >
+                {[0.5,0.75,1,1.25,1.5,2].map(v=><option key={v} value={v}>{v}×</option>)}
+              </select>
+            </label>
+          </div>
+
           {/* File / URL */}
           <div className="mb-4">
             <input type="file" accept="audio/*,video/*" onChange={e=>setFile(e.target.files?.[0]||null)} />
             {file && <p className="text-xs text-gray-400 mt-1">Selected: {file.name}</p>}
           </div>
+
+          {/* === TRANSCRIBE MODE === */}
           {mode==="transcribe" && (
             <>
               <div className="mb-3">
@@ -312,7 +309,11 @@ export default function Clipper() {
                 />
                 <p className="text-xs text-gray-400 mt-1">If a URL is provided, the file picker is ignored.</p>
               </div>
-              <div className="mb-4"><TemplateBar /></div>
+
+              <div className="mb-4">
+                <TemplateBar />
+              </div>
+
               <button
                 onClick={handleTranscribe}
                 disabled={isBusy}
@@ -324,8 +325,13 @@ export default function Clipper() {
                   <div className="font-semibold mb-1 pr-24">📝 Transcript</div>
                   <button
                     onClick={async () => {
-                      try { await navigator.clipboard.writeText(transcript); setCopied(true); setTimeout(()=>setCopied(false), 1500); }
-                      catch { setError("Clipboard blocked — select text and copy manually."); }
+                      try {
+                        await navigator.clipboard.writeText(transcript);
+                        setCopied(true);
+                        setTimeout(()=>setCopied(false), 1500);
+                      } catch {
+                        setError("Clipboard blocked — select text and copy manually.");
+                      }
                     }}
                     className="absolute top-3 right-3 text-xs bg-[#24304A] hover:bg-[#2c3b5c] px-2 py-1 rounded"
                     title="Copy transcript"
@@ -338,22 +344,16 @@ export default function Clipper() {
             </>
           )}
 
+          {/* === CLIP MODE === */}
           {mode==="clip" && (
             <>
-              <div className="flex flex-wrap items-center gap-6 mb-4 text-sm">
-                <label className="flex items-center gap-2">
-                  Preview speed
-                  <select
-                    value={previewSpeed}
-                    onChange={e=>setPreviewSpeed(Number(e.target.value))}
-                    className="bg-[#12182B] border border-[#27324A] rounded-md px-2 py-1"
-                  >
-                    {[0.5,0.75,1,1.25,1.5,2].map(v=><option key={v} value={v}>{v}×</option>)}
-                  </select>
-                </label>
+              <div className="mb-3 text-sm text-gray-400">
+                Add up to 5 clip segments. Process all at once; then preview or download each on this page.
               </div>
 
-              <div className="mb-4"><TemplateBar /></div>
+              <div className="mb-4">
+                <TemplateBar />
+              </div>
 
               {clips.map((c, idx)=>(
                 <div key={idx} className="border border-[#27324A] rounded-lg p-3 mb-3 bg-[#12182B]">
@@ -426,52 +426,26 @@ export default function Clipper() {
               {!!clipMsg && <p className="text-green-400 text-sm mt-3">{clipMsg}</p>}
               {!!error && <p className="text-red-400 text-sm mt-3">{error}</p>}
 
-              {/* Generated */}
               {generated.length > 0 && (
                 <div className="mt-8">
                   <h3 className="font-semibold mb-3">Generated Clips</h3>
                   <div className="grid gap-3 md:grid-cols-2">
-                    {generated.map((g, i) => (
-                      <ClipCard
-                        key={i}
-                        index={i}
-                        start={g.start}
-                        end={g.end}
-                        durationSec={g.duration_sec}
-                        previewUrl={g.preview_url}
-                        finalUrl={g.final_url}
-                        onPreview={(u)=> window.open(u, "_blank")}
-                        onDownload={(u, s, e) => downloadUrl(u, deriveDownloadName(file?.name || "clip", s, e))}
-                        onTranscript={(u) => transcribeClipByUrl(u)}
-                        onSave={() => saveClip(g)}
-                        onDelete={null} // delete only for Saved list below
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Saved (local) */}
-              {saved.length > 0 && (
-                <div className="mt-10">
-                  <h3 className="font-semibold mb-3">Saved Clips (This device)</h3>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {saved.map((g) => (
-                      <ClipCard
-                        key={g._key}
-                        index={null}
-                        start={g.start}
-                        end={g.end}
-                        durationSec={g.duration_sec}
-                        previewUrl={g.preview_url}
-                        finalUrl={g.final_url}
-                        onPreview={(u)=> window.open(u, "_blank")}
-                        onDownload={(u, s, e) => downloadUrl(u, deriveDownloadName(file?.name || "clip", s, e))}
-                        onTranscript={(u) => transcribeClipByUrl(u)}
-                        onSave={null}
-                        onDelete={() => deleteSaved(g._key)}
-                      />
-                    ))}
+                    {generated.map((g, i) => {
+                      const Card = require("./ClipCard.jsx").default;
+                      return (
+                        <Card
+                          key={i}
+                          index={i}
+                          start={g.start}
+                          end={g.end}
+                          durationSec={g.duration_seconds}
+                          previewUrl={g.preview_url}
+                          finalUrl={g.final_url}
+                          onDownload={(u, s, e) => downloadUrl(u, deriveDownloadName(file?.name || "clip", s, e))}
+                          onTranscript={(u) => transcribeClipByUrl(u)}
+                        />
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -484,14 +458,11 @@ export default function Clipper() {
         </div>
 
         {/* RIGHT: AI assistant */}
-        <div className={`${aiOpen ? "w-full" : "w-0"} overflow-hidden transition-all duration-300`}>
+        <div className={`${aiOpen ? "w-full md:w-[32rem]" : "w-0 md:w-0"} overflow-hidden transition-all duration-300`}>
           <div className="border border-[#27324A] bg-[#12182B] rounded-lg h-full flex flex-col">
             <div className="p-4 border-b border-[#27324A] flex items-center justify-between">
               <div className="font-semibold">🤖 ClipForge Assistant</div>
-              <button
-                onClick={()=>setAiOpen(false)}
-                className="text-xs bg-[#24304A] hover:bg-[#2c3b5c] px-2 py-1 rounded"
-              >Hide</button>
+              <button onClick={()=>setAiOpen(false)} className="text-xs bg-[#24304A] hover:bg-[#2c3b5c] px-2 py-1 rounded">Hide</button>
             </div>
 
             <div className="p-3 border-b border-[#27324A]">
@@ -506,7 +477,9 @@ export default function Clipper() {
 
             <div className="flex-1 overflow-auto p-4 space-y-3">
               {aiMsgs.length === 0 && (
-                <div className="text-white/60 text-sm">Ask summaries, titles, hooks—or “find the best 3 moments”.</div>
+                <div className="text-white/60 text-sm">
+                  Ask for summaries, titles, hooks—or “find the best 3 moments”.
+                </div>
               )}
               {aiMsgs.map((m, i) => (
                 <div key={i} className={`text-sm leading-6 ${m.role === 'assistant' ? 'text-white' : 'text-indigo-300'}`}>
@@ -542,14 +515,6 @@ export default function Clipper() {
           </div>
         </div>
 
-        {!aiOpen && (
-          <button
-            onClick={()=>setAiOpen(true)}
-            className="fixed right-4 bottom-4 md:right-6 md:bottom-6 bg-[#6C5CE7] hover:bg-[#5A4ED1] px-3 py-2 rounded-lg shadow-lg"
-          >
-            🤖 Open Assistant
-          </button>
-        )}
       </div>
     </div>
   );
