@@ -1,4 +1,3 @@
-// src/components/ClipCard.jsx
 import React, { useState } from "react";
 
 export default function ClipCard({
@@ -6,133 +5,93 @@ export default function ClipCard({
   start,
   end,
   durationSec,
-  thumbUrl,
   previewUrl,
   finalUrl,
-  onPreview,
   onDownload,
   onTranscript,
-  onSave,
-  onDelete,
+  onSave,      // (future)
+  onDelete     // (future)
 }) {
   const [open, setOpen] = useState(false);
 
   return (
-    <>
-      <div className="bg-[#12182B] border border-[#27324A] rounded-lg p-3 text-white">
-        {/* Thumbnail + Duration */}
-        <div
-          className="relative cursor-pointer"
+    <div className="border border-[#27324A] rounded-lg overflow-hidden bg-[#12182B]">
+      <div className="p-3 flex items-center gap-3">
+        <div className="text-sm opacity-80">Clip {index + 1}</div>
+        <div className="text-xs text-gray-400 ml-auto">{start} → {end} • {durationSec ? `${Math.round(durationSec)}s` : ""}</div>
+      </div>
+
+      {/* Thumbnail substitute (simple bar) */}
+      <div className="h-20 bg-[#0B1020] flex items-center justify-center text-xs text-gray-500">
+        {previewUrl ? "Preview Ready" : "—"}
+      </div>
+
+      <div className="p-3 flex flex-wrap gap-2">
+        <button
           onClick={() => setOpen(true)}
+          disabled={!previewUrl}
+          className="px-3 py-1 text-sm rounded bg-[#24304A] disabled:opacity-50"
+          title="Preview"
         >
-          {thumbUrl ? (
-            <img
-              src={thumbUrl}
-              alt="thumb"
-              className="w-full h-40 object-cover rounded"
-            />
-          ) : (
-            <div className="w-full h-40 bg-[#1C2539] flex items-center justify-center text-gray-400">
-              No Thumbnail
-            </div>
-          )}
-          <div className="absolute bottom-1 right-1 bg-black/70 text-xs px-2 py-0.5 rounded">
-            {durationSec ? `${durationSec.toFixed(1)}s` : ""}
-          </div>
-        </div>
+          Preview
+        </button>
 
-        {/* Info */}
-        <div className="mt-2 text-sm">
-          <div className="font-semibold">Clip {index + 1}</div>
-          <div className="text-gray-400 text-xs">
-            {start} → {end}
-          </div>
-        </div>
+        <button
+          onClick={() => onDownload?.(previewUrl || finalUrl, start, end)}
+          disabled={!previewUrl && !finalUrl}
+          className="px-3 py-1 text-sm rounded bg-[#24304A] disabled:opacity-50"
+          title="Download"
+        >
+          Download
+        </button>
 
-        {/* Buttons */}
-        <div className="flex flex-wrap gap-2 mt-3 text-xs">
-          <button
-            onClick={() => setOpen(true)}
-            className="bg-indigo-600 hover:bg-indigo-700 px-2 py-1 rounded"
-          >
-            Preview
-          </button>
+        <button
+          onClick={() => onTranscript?.(previewUrl || finalUrl)}
+          disabled={!previewUrl && !finalUrl}
+          className="px-3 py-1 text-sm rounded bg-[#24304A] disabled:opacity-50"
+          title="Transcript this clip"
+        >
+          Transcript
+        </button>
 
-          {previewUrl && (
-            <button
-              onClick={() => onDownload(previewUrl, start, end)}
-              className="bg-emerald-600 hover:bg-emerald-700 px-2 py-1 rounded"
-            >
-              Download
-            </button>
-          )}
+        <button
+          onClick={onSave}
+          className="px-3 py-1 text-sm rounded bg-[#24304A]"
+          title="Save (coming next)"
+        >
+          Save
+        </button>
 
-          {previewUrl && (
-            <button
-              onClick={() => onTranscript(previewUrl)}
-              className="bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded"
-            >
-              Transcript
-            </button>
-          )}
-
-          {onSave && (
-            <button
-              onClick={onSave}
-              className="bg-blue-600 hover:bg-blue-700 px-2 py-1 rounded"
-            >
-              Save
-            </button>
-          )}
-
-          {onDelete && (
-            <button
-              onClick={onDelete}
-              className="bg-red-600 hover:bg-red-700 px-2 py-1 rounded"
-            >
-              Delete
-            </button>
-          )}
-        </div>
+        <button
+          onClick={onDelete}
+          className="px-3 py-1 text-sm rounded bg-[#24304A]"
+          title="Delete (coming next)"
+        >
+          Delete
+        </button>
       </div>
 
       {/* Modal */}
       {open && (
-        <div
-          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
-          onClick={() => setOpen(false)}
-        >
-          <div
-            className="bg-[#0B1020] p-3 rounded-lg max-w-xl w-full shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-between items-center mb-2">
-              <div className="font-semibold text-sm">
-                Clip {index + 1} Preview
-              </div>
-              <button
-                className="text-gray-300 hover:text-white"
-                onClick={() => setOpen(false)}
-              >
-                ✕
-              </button>
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-[#0B1020] border border-[#27324A] rounded-xl w-[92vw] max-w-3xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-sm opacity-80">Preview • {start} → {end}</div>
+              <button onClick={() => setOpen(false)} className="text-xs px-2 py-1 rounded bg-[#24304A]">Close</button>
             </div>
-
             {previewUrl ? (
               <video
                 src={previewUrl}
                 controls
-                autoPlay
-                className="w-full rounded"
+                style={{width:"100%", borderRadius: 10}}
+                playsInline
               />
             ) : (
-              <div className="text-gray-400 text-center py-8">
-                No preview available
-              </div>
+              <div className="text-sm text-gray-400">No preview available.</div>
             )}
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }
