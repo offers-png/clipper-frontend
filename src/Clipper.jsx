@@ -1,6 +1,6 @@
-// src/Clipper.jsx — Multi-clip UI with modal preview + per-clip transcription + AI helper
+// src/Clipper.jsx — Netflix grid, modal preview, per-clip transcript, AI helper (S1 foundation)
 import React, { useEffect, useState, useRef } from "react";
-import { supabase } from "./supabaseClient"; // keep your existing client
+import { supabase } from "./supabaseClient";
 import logo from "./assets/react.svg";
 import ClipCard from "./ClipCard";
 
@@ -16,7 +16,7 @@ function timeToSeconds(t) {
 }
 
 export default function Clipper() {
-  // auth check
+  // ---------- auth guard ----------
   useEffect(() => {
     (async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -24,7 +24,7 @@ export default function Clipper() {
     })();
   }, []);
 
-  // state
+  // ---------- state ----------
   const [mode, setMode] = useState("transcribe");
   const [file, setFile] = useState(null);
   const [url, setUrl] = useState("");
@@ -37,7 +37,14 @@ export default function Clipper() {
   const [watermarkOn, setWatermarkOn] = useState(true);
   const [wmText, setWmText] = useState("@ClippedBySal");
 
-  // AI helper
+  // results from /clip_multi
+  const [generated, setGenerated] = useState([]); // [{start,end,preview_url,final_url,thumb_url,duration_text,duration_seconds}]
+
+  // modal preview
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewSrc, setPreviewSrc] = useState("");
+
+  // AI helper (S1)
   const [aiOpen, setAiOpen] = useState(true);
   const [aiMsgs, setAiMsgs] = useState([]);
   const [aiInput, setAiInput] = useState("");
@@ -47,13 +54,6 @@ export default function Clipper() {
 
   const [copied, setCopied] = useState(false);
 
-  // results from /clip_multi
-  const [generated, setGenerated] = useState([]); // [{start,end,preview_url,final_url,thumb_url,duration_text}]
-
-  // preview modal
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewSrc, setPreviewSrc] = useState("");
-
   const resetMessages = () => { setError(""); setClipMsg(""); };
 
   async function handleLogout() {
@@ -61,7 +61,7 @@ export default function Clipper() {
     window.location.href = "/";
   }
 
-  // --------- Transcribe (file or URL) ----------
+  // ---------- transcribe (file or URL) ----------
   async function handleTranscribe() {
     try {
       resetMessages(); setIsBusy(true);
@@ -84,7 +84,7 @@ export default function Clipper() {
     }
   }
 
-  // --------- Clip helpers ----------
+  // ---------- clip helpers ----------
   function addClip() {
     if (clips.length >= 5) return;
     setClips([...clips, { start: "00:00:00", end: "00:00:10", summary: "" }]);
@@ -97,9 +97,9 @@ export default function Clipper() {
     const base = (original || "video").replace(/\.[^.]+$/, "");
     return `${base}_${start.replaceAll(":","-")}-${end.replaceAll(":","-")}.mp4`;
   }
-  function downloadUrl(url, filename) {
+  function downloadUrl(href, filename) {
     const a = document.createElement("a");
-    a.href = url;
+    a.href = href;
     a.download = filename || "clip.mp4";
     document.body.appendChild(a);
     a.click();
@@ -128,12 +128,12 @@ export default function Clipper() {
 
       setGenerated(Array.isArray(data.items) ? data.items : []);
       setClipMsg("✅ All clips processed.");
-      setMode("clip");
+      setMode("clip"); // jump to clip view
     } catch (e) { setError(e.message); }
     finally { setIsBusy(false); }
   }
 
-  // per-clip transcript (by URL)
+  // per-clip transcript (URL → Whisper)
   async function transcribeClipByUrl(clipUrl) {
     try {
       if (!clipUrl) throw new Error("No clip URL provided.");
@@ -145,7 +145,7 @@ export default function Clipper() {
       if (!res.ok || !data.ok) throw new Error(data.error || "Transcription failed");
       setClipMsg("📝 Clip transcript ready (see Transcript panel).");
       setTranscript(data.text || "(no text)");
-      setMode("transcribe"); // show transcript panel immediately
+      setMode("transcribe");
     } catch (e) {
       setError(e.message);
     } finally {
@@ -153,7 +153,7 @@ export default function Clipper() {
     }
   }
 
-  // --------- AI helper ----------
+  // ---------- AI helper (S1) ----------
   async function askAI(message) {
     if (!message.trim()) return;
     try {
@@ -328,7 +328,7 @@ export default function Clipper() {
                         await navigator.clipboard.writeText(transcript);
                         setCopied(true);
                         setTimeout(()=>setCopied(false), 1500);
-                      } catch (e) {
+                      } catch {
                         setError("Clipboard blocked — select text and copy manually.");
                       }
                     }}
@@ -354,6 +354,7 @@ export default function Clipper() {
                 <TemplateBar />
               </div>
 
+              {/* form for creating sections */}
               {clips.map((c, idx)=>(
                 <div key={idx} className="border border-[#27324A] rounded-lg p-3 mb-3 bg-[#12182B]">
                   <div className="flex items-center justify-between mb-2">
@@ -395,7 +396,6 @@ export default function Clipper() {
                       return <div className="absolute h-full bg-[#6C5CE7]" style={{ left:`${sp}%`, width:`${w}%` }} />;
                     })()}
                   </div>
-
                   <p className="text-xs text-gray-400 text-center">{c.start} → {c.end}</p>
 
                   <div className="mt-3 text-xs text-gray-300 bg-[#0F172A] rounded p-2">
@@ -425,14 +425,14 @@ export default function Clipper() {
               {!!clipMsg && <p className="text-green-400 text-sm mt-3">{clipMsg}</p>}
               {!!error && <p className="text-red-400 text-sm mt-3">{error}</p>}
 
-              {/* Generated clips */}
+              {/* Generated Clips — Netflix grid */}
               {generated.length > 0 && (
                 <div className="mt-8">
                   <h3 className="font-semibold mb-3">Generated Clips</h3>
-                  <div className="grid gap-3 md:grid-cols-2">
+                  <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                     {generated.map((g, i) => (
                       <ClipCard
-                        key={i}
+                        key={`${g.preview_url || g.final_url || i}`}
                         index={i}
                         start={g.start}
                         end={g.end}
@@ -527,19 +527,9 @@ export default function Clipper() {
             </div>
           </div>
         </div>
-
-        {/* Floating button when collapsed */}
-        {!aiOpen && (
-          <button
-            onClick={()=>setAiOpen(true)}
-            className="fixed right-4 bottom-4 md:right-6 md:bottom-6 bg-[#6C5CE7] hover:bg-[#5A4ED1] px-3 py-2 rounded-lg shadow-lg"
-          >
-            🤖 Open Assistant
-          </button>
-        )}
       </div>
 
-      {/* === Modal Preview (no page change) === */}
+      {/* Modal Preview (same page) */}
       {previewOpen && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
           <div className="bg-[#0B1020] border border-[#27324A] rounded-lg p-4 w-[90vw] max-w-3xl">
