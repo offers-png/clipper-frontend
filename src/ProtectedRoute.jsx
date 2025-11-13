@@ -3,7 +3,7 @@ import React from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Clipper from "./Clipper";
 import ProtectedRoute from "./ProtectedRoute";
-import LoginPage from "./LoginPage";
+import LoginPage from "./Login";
 
 export default function App() {
   return (
