@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { supabase } from "./supabaseClient";
 import logo from "./assets/react.svg";
-import ClipCard from "./ClipCard";
+import ClipCard from "./components/ClipCard.jsx";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "https://clipper-api-final-1.onrender.com";
 const VIDEO_DURATION = 300; // visual ruler only
