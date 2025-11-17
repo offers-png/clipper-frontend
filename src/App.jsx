@@ -1,15 +1,15 @@
 // src/App.jsx
 import React from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Clipper from "./Clipper";
 import ProtectedRoute from "./ProtectedRoute";
-import LoginPage from "./Login"; // <-- correct import
+import LoginPage from "./Login";
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Default Route → Login */}
+        {/* Public Route */}
         <Route path="/" element={<LoginPage />} />
 
         {/* Protected Route */}
@@ -21,9 +21,6 @@ export default function App() {
             </ProtectedRoute>
           }
         />
-
-        {/* Catch-all routes redirect to Login */}
-        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );
