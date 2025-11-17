@@ -10,7 +10,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         {/* Public Route */}
-        <Route path="/" element={<LoginPage />} />
+        <Route path="/" element={<AuthForm />} />
 
         {/* Protected Route */}
         <Route
