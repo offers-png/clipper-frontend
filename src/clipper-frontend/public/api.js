@@ -1,6 +1,13 @@
-export async function postForm(url, data) {
-  const fd = new FormData();
-  Object.entries(data).forEach(([k, v]) => v !== undefined && v !== null && fd.append(k, v));
-  const r = await fetch(url, { method: "POST", body: fd });
-  return r.json();
+const API_URL = "https://clipper-api-final-1.onrender.com";
+
+export async function sendMagicLink(email) {
+  const res = await fetch(`${API_URL}/auth/send-magic-link`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+
+  if (!res.ok) throw new Error("Failed to send magic link");
+
+  return res.json();
 }
