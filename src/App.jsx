@@ -1,14 +1,17 @@
+import React from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import LoginPage from "./Login";
 import Clipper from "./Clipper";
 import ProtectedRoute from "./ProtectedRoute";
+import LoginPage from "./LoginPage";
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Login />} />
+        {/* Public Route */}
+        <Route path="/" element={<LoginPage />} />
 
+        {/* Protected Route */}
         <Route
           path="/app"
           element={
