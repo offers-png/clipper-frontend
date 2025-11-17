@@ -20,7 +20,7 @@ export default function AuthForm() {
   const handleGoogleLogin = async () => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: "https://clipper-frontend.onrender.com/clipper" },
+      options: { redirectTo: "https://clipper-frontend.onrender.com/auth/callback" },
     });
     if (error) alert(error.message);
   };
