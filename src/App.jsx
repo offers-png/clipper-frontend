@@ -1,45 +1,29 @@
+// src/App.jsx
 import React from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import AuthForm from "./AuthForm";        // or "./Login" / "./LoginPage" if you used that name
 import Clipper from "./Clipper";
 import ProtectedRoute from "./ProtectedRoute";
-import LoginPage from "./LoginPage";
-import { useEffect } from "react";
-import { supabase } from "./supabaseClient";
-
-useEffect(() => {
-  const { data: listener } = supabase.auth.onAuthStateChange(
-    async (event, session) => {
-      if (event === "SIGNED_IN") {
-        console.log("User signed in:", session?.user);
-      }
-      if (event === "SIGNED_OUT") {
-        console.log("User signed out");
-        window.location.href = "/";
-      }
-    }
-  );
-
-  return () => {
-    listener.subscription.unsubscribe();
-  };
-}, []);
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public Route */}
-        <Route path="/" element={<LoginPage />} />
+        {/* Login / Signup page */}
+        <Route path="/" element={<AuthForm />} />
 
-        {/* Protected Route */}
+        {/* Main app (requires auth) */}
         <Route
-          path="/app"
+          path="/clipper"
           element={
             <ProtectedRoute>
               <Clipper />
             </ProtectedRoute>
           }
         />
+
+        {/* Anything unknown -> back to login instead of blank page */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );
