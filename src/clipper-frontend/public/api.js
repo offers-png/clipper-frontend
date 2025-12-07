@@ -1,4 +1,4 @@
-const API_URL = "https://clipper-api-final-1.onrender.com";
+export const API_BASE = "https://clipper-api-final-1.onrender.com";
 
 export async function sendMagicLink(email) {
   const res = await fetch(`${API_URL}/auth/send-magic-link`, {
