@@ -21,6 +21,23 @@ export default function Dashboard() {
     };
     getUser();
   }, []);
+  
+ useEffect(() => {
+  const loadHistory = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data } = await supabase
+      .from("history")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+
+    setHistory(data);
+  };
+
+  loadHistory();
+}, []);
 
   // Fetch data when user is loaded
   useEffect(() => {
