@@ -14,15 +14,14 @@ export default function AssistantChat({ transcript }) {
     setMessages((prev) => [...prev, userMsg]);
     setLoading(true);
 
-    try {
-      const res = await fetch(`${API_URL}/ask-ai`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: input,
-          transcript: transcript || "",
-        }),
-      });
+    const res = await fetch(`${API_URL}/ask-ai`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    prompt: input,
+    transcript: transcript || "",  // <-- VERY IMPORTANT
+  }),
+});
 
       const data = await res.json();
       const botMsg = { sender: "assistant", text: data.reply };
