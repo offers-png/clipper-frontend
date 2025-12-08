@@ -163,7 +163,7 @@ export default function Clipper() {
       fd.append("user_message", message);
       fd.append("transcript", transcript || "");
       fd.append("history", JSON.stringify(aiMsgs));
-      const res = await fetch(`${API_BASE}/ai_chat`, { method: "POST", body: fd });
+      const res = await fetch(`${API_BASE}/ask-ai`, { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || "AI helper failed");
       setAiMsgs(m => [
