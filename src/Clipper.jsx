@@ -135,24 +135,31 @@ export default function Clipper() {
   }
 
   // per-clip transcript (URL → Whisper)
-  async function transcribeClipByUrl(clipUrl) {
-    try {
-      if (!clipUrl) throw new Error("No clip URL provided.");
-      setIsBusy(true);
-      const fd = new FormData();
-      fd.append("url", clipUrl);
-      const res = await fetch(`${API_BASE}/transcribe`, { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok || !data.ok) throw new Error(data.error || "Transcription failed");
-      setClipMsg("📝 Clip transcript ready (see Transcript panel).");
-      setTranscript(data.text || "(no text)");
-      setMode("transcribe");
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setIsBusy(false);
-    }
+ async function transcribeClipByUrl(clipUrl) {
+  try {
+    if (!clipUrl) throw new Error("No clip URL provided.");
+    setIsBusy(true);
+
+    const res = await fetch(`${API_BASE}/transcribe_clip`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: clipUrl })
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || "Clip transcription failed.");
+
+    setClipMsg("📝 Clip transcript ready (see Transcript panel).");
+    setTranscript(data.text || "(no text)");
+    setMode("transcribe");
+
+  } catch (e) {
+    setError(e.message);
+  } finally {
+    setIsBusy(false);
   }
+}
+
 
   // ---------- AI helper (S1) ----------
   async function askAI(message) {
