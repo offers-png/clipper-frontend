@@ -156,27 +156,34 @@ export default function Clipper() {
 
   // ---------- AI helper (S1) ----------
   async function askAI(message) {
-    if (!message.trim()) return;
-    try {
-      setAiBusy(true);
-      const fd = new FormData();
-      fd.append("user_message", message);
-      fd.append("transcript", transcript || "");
-      fd.append("history", JSON.stringify(aiMsgs));
-      const res = await fetch(`${API_BASE}/ask-ai`, { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok || !data.ok) throw new Error(data.error || "AI helper failed");
-      setAiMsgs(m => [
-        ...m,
-        { role: "user", content: message },
-        { role: "assistant", content: data.reply || "(no reply)" },
-      ]);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setAiBusy(false);
-    }
+  if (!message.trim()) return;
+  try {
+    setAiBusy(true);
+    const fd = new FormData();
+    fd.append("user_message", message);
+    fd.append("transcript", transcript || "");
+    fd.append("history", JSON.stringify(aiMsgs));
+
+    const res = await fetch(`${API_BASE}/ai_chat`, {   // ✅ FIXED
+      method: "POST",
+      body: fd
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || "AI helper failed");
+
+    setAiMsgs(m => [
+      ...m,
+      { role: "user", content: message },
+      { role: "assistant", content: data.reply || "(no reply)" },
+    ]);
+
+  } catch (e) {
+    setError(e.message);
+  } finally {
+    setAiBusy(false);
   }
+}
 
   function tplSummarize() {
     if (!transcript) return setError("Transcribe first or paste a URL.");
