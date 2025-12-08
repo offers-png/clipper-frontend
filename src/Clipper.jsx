@@ -3,7 +3,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { supabase } from "./supabaseClient";
 import logo from "./assets/react.svg";
 import ClipCard from "./components/ClipCard.jsx";
-import AssistantChat from "./AssistantChat";
+import AssistantChat from "./components/AssistantChat.jsx";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "https://clipper-api-final-1.onrender.com";
 const VIDEO_DURATION = 300; // visual ruler only
