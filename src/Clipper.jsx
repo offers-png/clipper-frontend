@@ -148,7 +148,11 @@ export default function Clipper() {
     const fd = new FormData();
     fd.append("url", clipUrl);
 
-    const res = await fetch(`${API_BASE}/transcribe`, { method: "POST", body: fd });
+   const res = await fetch(`${API_BASE}/transcribe_clip`, {
+  method: "POST",
+  body: fd
+});
+
     const data = await res.json();
 
     if (!res.ok || !data.ok) throw new Error(data.error || "Transcription failed");
