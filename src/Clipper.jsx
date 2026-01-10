@@ -68,7 +68,7 @@ export default function Clipper() {
       resetMessages(); setIsBusy(true);
       const fd = new FormData();
       if (url.trim()) {
-        fd.append("url", url.trim());
+     fd.append("clip_url", url.trim());
       } else {
         if (!file) { setError("Choose a file or paste a URL."); setIsBusy(false); return; }
         fd.append("file", file);
