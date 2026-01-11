@@ -64,26 +64,50 @@ export default function Clipper() {
 
   // ---------- transcribe (file or URL) ----------
   async function handleTranscribe() {
-    try {
-      resetMessages(); setIsBusy(true);
-      const fd = new FormData();
-      if (url.trim()) {
-     fd.append("clip_url", url.trim());
-      } else {
-        if (!file) { setError("Choose a file or paste a URL."); setIsBusy(false); return; }
-        fd.append("file", file);
-      }
-      const res = await fetch(`${API_BASE}/transcribe`, { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok || !data.ok) throw new Error(data.error || "Transcription failed");
-      setTranscript(data.text || "(no text)");
-      setAiMsgs(m => [...m, { role: "assistant", content: "📝 Transcript is ready. Ask for titles, hooks, or best moments." }]);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setIsBusy(false);
+  try {
+    resetMessages();
+    setIsBusy(true);
+
+    const fd = new FormData();
+
+    // ✅ If we already generated clips, transcribe the FIRST preview clip
+    if (generated.length > 0 && generated[0].preview_url) {
+      fd.append("clip_url", generated[0].preview_url);
     }
+    // ✅ Otherwise allow raw upload / URL
+    else if (url.trim()) {
+      fd.append("url", url.trim()); // <-- NOTE: url, NOT clip_url
+    }
+    else {
+      if (!file) {
+        setError("Choose a file or paste a URL.");
+        setIsBusy(false);
+        return;
+      }
+      fd.append("file", file);
+    }
+
+    const res = await fetch(`${API_BASE}/transcribe`, {
+      method: "POST",
+      body: fd
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.ok) throw new Error(data.error || "Transcription failed");
+
+    setTranscript(data.text || "(no text)");
+    setAiMsgs(m => [
+      ...m,
+      { role: "assistant", content: "📝 Transcript is ready. Ask for titles, hooks, or best moments." }
+    ]);
+
+  } catch (e) {
+    setError(e.message);
+  } finally {
+    setIsBusy(false);
   }
+}
+
 
   // ---------- clip helpers ----------
   function addClip() {
