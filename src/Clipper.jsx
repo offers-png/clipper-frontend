@@ -76,7 +76,7 @@ export default function Clipper() {
     }
     // ✅ Otherwise allow raw upload / URL
     else if (url.trim()) {
-      fd.append("url", url.trim()); // <-- NOTE: url, NOT clip_url
+      fd.append("url", url.trim()); 
     }
     else {
       if (!file) {
