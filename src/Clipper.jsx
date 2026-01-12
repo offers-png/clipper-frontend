@@ -72,7 +72,7 @@ export default function Clipper() {
 
     // ✅ If we already generated clips, transcribe the FIRST preview clip
     if (generated.length > 0 && generated[0].preview_url) {
-      fd.append("clip_url", generated[0].preview_url);
+      fd.append("url", generated[0].preview_url);
     }
     // ✅ Otherwise allow raw upload / URL
     else if (url.trim()) {
