@@ -30,6 +30,7 @@ export default function Clipper() {
   const [file, setFile] = useState(null);
   const [url, setUrl] = useState("");
   const [transcript, setTranscript] = useState("");
+  const [currentRecordId, setCurrentRecordId] = useState(null);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState("");
   const [clipMsg, setClipMsg] = useState("");
@@ -69,16 +70,18 @@ export default function Clipper() {
     setIsBusy(true);
 
     const fd = new FormData();
+    
+    // Get user info from Supabase
+    const { data: { user } } = await supabase.auth.getUser();
+    const userId = user?.email || "@ClippedBySal";
+    
+    fd.append("user_id", userId);
 
-    // ✅ If we already generated clips, transcribe the FIRST preview clip
     if (generated.length > 0 && generated[0].preview_url) {
       fd.append("url", generated[0].preview_url);
-    }
-    // ✅ Otherwise allow raw upload / URL
-    else if (url.trim()) {
+    } else if (url.trim()) {
       fd.append("url", url.trim()); 
-    }
-    else {
+    } else {
       if (!file) {
         setError("Choose a file or paste a URL.");
         setIsBusy(false);
@@ -96,6 +99,17 @@ export default function Clipper() {
     if (!res.ok || !data.ok) throw new Error(data.error || "Transcription failed");
 
     setTranscript(data.text || "(no text)");
+    
+    // Get the latest record ID from history
+    if (data.saved_to_db) {
+      const historyRes = await fetch(`${API_BASE}/history/${userId}?limit=1`);
+      const historyData = await historyRes.json();
+      if (historyData.history && historyData.history.length > 0) {
+        setCurrentRecordId(historyData.history[0].id);
+        console.log("✅ Record ID saved:", historyData.history[0].id);
+      }
+    }
+
     setAiMsgs(m => [
       ...m,
       { role: "assistant", content: "📝 Transcript is ready. Ask for titles, hooks, or best moments." }
@@ -184,9 +198,41 @@ async function transcribeClipByUrl(clipUrl) {
     setIsBusy(false);
   }
 }
+    async function saveAIInsights(type, content) {
+  try {
+    if (!currentRecordId) {
+      console.log("⚠️ No record ID - skipping save");
+      return;
+    }
 
+    const fd = new FormData();
+    fd.append("record_id", currentRecordId);
+    
+    if (type === "hooks") {
+      fd.append("hooks", content);
+    } else if (type === "hashtags") {
+      fd.append("hashtags", content);
+    } else if (type === "summary") {
+      fd.append("summary", content);
+    } else if (type === "titles") {
+      fd.append("titles", content);
+    }
+
+    const res = await fetch(`${API_BASE}/history/update`, {
+      method: "POST",
+      body: fd
+    });
+
+    const data = await res.json();
+    if (data.ok) {
+      console.log(`✅ Saved ${type} to database`);
+    }
+  } catch (e) {
+    console.error("Error saving to DB:", e);
+  }
+}
   // ---------- AI helper (S1) ----------
-  async function askAI(message) {
+  async function askAI(message, insightType = null) {
   if (!message.trim()) return;
   try {
     setAiBusy(true);
@@ -195,7 +241,7 @@ async function transcribeClipByUrl(clipUrl) {
     fd.append("transcript", transcript || "");
     fd.append("history", JSON.stringify(aiMsgs));
 
-    const res = await fetch(`${API_BASE}/ai_chat`, {   // ✅ FIXED
+    const res = await fetch(`${API_BASE}/ai_chat`, {
       method: "POST",
       body: fd
     });
@@ -203,11 +249,18 @@ async function transcribeClipByUrl(clipUrl) {
     const data = await res.json();
     if (!res.ok || !data.ok) throw new Error(data.error || "AI helper failed");
 
+    const aiReply = data.reply || "(no reply)";
+
     setAiMsgs(m => [
       ...m,
       { role: "user", content: message },
-      { role: "assistant", content: data.reply || "(no reply)" },
+      { role: "assistant", content: aiReply },
     ]);
+
+    // Auto-save AI responses to database
+    if (insightType && currentRecordId) {
+      await saveAIInsights(insightType, aiReply);
+    }
 
   } catch (e) {
     setError(e.message);
