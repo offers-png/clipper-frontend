@@ -31,6 +31,7 @@ export default function Clipper() {
   const [url, setUrl] = useState("");
   const [transcript, setTranscript] = useState("");
   const [currentRecordId, setCurrentRecordId] = useState(null);
+  const [currentRecordId, setCurrentRecordId] = useState(null);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState("");
   const [clipMsg, setClipMsg] = useState("");
@@ -71,17 +72,21 @@ export default function Clipper() {
 
     const fd = new FormData();
     
-    // Get user info from Supabase
+    // ✅ Get user info from Supabase
     const { data: { user } } = await supabase.auth.getUser();
     const userId = user?.email || "@ClippedBySal";
     
     fd.append("user_id", userId);
 
+    // ✅ If we already generated clips, transcribe the FIRST preview clip
     if (generated.length > 0 && generated[0].preview_url) {
       fd.append("url", generated[0].preview_url);
-    } else if (url.trim()) {
+    }
+    // ✅ Otherwise allow raw upload / URL
+    else if (url.trim()) {
       fd.append("url", url.trim()); 
-    } else {
+    }
+    else {
       if (!file) {
         setError("Choose a file or paste a URL.");
         setIsBusy(false);
@@ -100,7 +105,7 @@ export default function Clipper() {
 
     setTranscript(data.text || "(no text)");
     
-    // Get the latest record ID from history
+    // ✅ Get the latest record ID from history
     if (data.saved_to_db) {
       const historyRes = await fetch(`${API_BASE}/history/${userId}?limit=1`);
       const historyData = await historyRes.json();
@@ -121,7 +126,6 @@ export default function Clipper() {
     setIsBusy(false);
   }
 }
-
 
   // ---------- clip helpers ----------
   function addClip() {
@@ -231,8 +235,33 @@ async function transcribeClipByUrl(clipUrl) {
     console.error("Error saving to DB:", e);
   }
 }
+
+  async function saveAIInsights(type, content) {
+  try {
+    if (!currentRecordId) {
+      console.log("⚠️ No record ID - skipping save");
+      return;
+    }
+
+    const fd = new FormData();
+    fd.append("record_id", currentRecordId);
+    fd.append(type, content);
+
+    const res = await fetch(`${API_BASE}/history/update`, {
+      method: "POST",
+      body: fd
+    });
+
+    const data = await res.json();
+    if (data.ok) {
+      console.log(`✅ Saved ${type} to database`);
+    }
+  } catch (e) {
+    console.error("Error saving to DB:", e);
+  }
+}
   // ---------- AI helper (S1) ----------
-  async function askAI(message, insightType = null) {
+ async function askAI(message, insightType = null) {
   if (!message.trim()) return;
   try {
     setAiBusy(true);
@@ -257,7 +286,7 @@ async function transcribeClipByUrl(clipUrl) {
       { role: "assistant", content: aiReply },
     ]);
 
-    // Auto-save AI responses to database
+    // ✅ Auto-save AI responses to database
     if (insightType && currentRecordId) {
       await saveAIInsights(insightType, aiReply);
     }
@@ -270,21 +299,24 @@ async function transcribeClipByUrl(clipUrl) {
 }
 
   function tplSummarize() {
-    if (!transcript) return setError("Transcribe first or paste a URL.");
-    askAI("Summarize the transcript into 5 bullet points with key takeaways.");
-  }
-  function tplTitles() {
-    if (!transcript) return setError("Transcribe first or paste a URL.");
-    askAI("Write 5 viral, punchy titles (max 60 chars each) based on this transcript.");
-  }
-  function tplHooks() {
-    if (!transcript) return setError("Transcribe first or paste a URL.");
-    askAI("Give me 7 short opening hooks (under 80 chars) tailored for Shorts/TikTok.");
-  }
-  function tplHashtags() {
-    if (!transcript) return setError("Transcribe first or paste a URL.");
-    askAI("Suggest 10 relevant hashtags + 10 SEO keywords for this content.");
-  }
+  if (!transcript) return setError("Transcribe first or paste a URL.");
+  askAI("Summarize the transcript into 5 bullet points with key takeaways.", "summary");
+}
+
+function tplTitles() {
+  if (!transcript) return setError("Transcribe first or paste a URL.");
+  askAI("Write 5 viral, punchy titles (max 60 chars each) based on this transcript.", "titles");
+}
+
+function tplHooks() {
+  if (!transcript) return setError("Transcribe first or paste a URL.");
+  askAI("Give me 7 short opening hooks (under 80 chars) tailored for Shorts/TikTok.", "hooks");
+}
+
+function tplHashtags() {
+  if (!transcript) return setError("Transcribe first or paste a URL.");
+  askAI("Suggest 10 relevant hashtags + 10 SEO keywords for this content.", "hashtags");
+}
   async function tplBestMoments() {
     try {
       if (!transcript) return setError("Transcribe first or paste a URL.");
