@@ -31,7 +31,6 @@ export default function Clipper() {
   const [url, setUrl] = useState("");
   const [transcript, setTranscript] = useState("");
   const [currentRecordId, setCurrentRecordId] = useState(null);
-  const [currentRecordId, setCurrentRecordId] = useState(null);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState("");
   const [clipMsg, setClipMsg] = useState("");
