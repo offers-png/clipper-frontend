@@ -1,9 +1,8 @@
 // src/Clipper.jsx — Netflix grid, modal preview, per-clip transcript, AI helper (S1 foundation)
-import React, { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { supabase } from "./supabaseClient";
 import logo from "./assets/react.svg";
 import ClipCard from "./components/ClipCard.jsx";
-import AssistantChat from "./components/AssistantChat.jsx";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "https://clipper-api-final-1.onrender.com";
 const VIDEO_DURATION = 300; // visual ruler only
@@ -201,40 +200,6 @@ async function transcribeClipByUrl(clipUrl) {
     setIsBusy(false);
   }
 }
-    async function saveAIInsights(type, content) {
-  try {
-    if (!currentRecordId) {
-      console.log("⚠️ No record ID - skipping save");
-      return;
-    }
-
-    const fd = new FormData();
-    fd.append("record_id", currentRecordId);
-    
-    if (type === "hooks") {
-      fd.append("hooks", content);
-    } else if (type === "hashtags") {
-      fd.append("hashtags", content);
-    } else if (type === "summary") {
-      fd.append("summary", content);
-    } else if (type === "titles") {
-      fd.append("titles", content);
-    }
-
-    const res = await fetch(`${API_BASE}/history/update`, {
-      method: "POST",
-      body: fd
-    });
-
-    const data = await res.json();
-    if (data.ok) {
-      console.log(`✅ Saved ${type} to database`);
-    }
-  } catch (e) {
-    console.error("Error saving to DB:", e);
-  }
-}
-
   async function saveAIInsights(type, content) {
   try {
     if (!currentRecordId) {
