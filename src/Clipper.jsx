@@ -34,7 +34,7 @@ export default function Clipper() {
   const [error, setError] = useState("");
   const [clipMsg, setClipMsg] = useState("");
 
-  const [clips, setClips] = useState([{ start: "00:00:00", end: "00:00:10", summary: "" }]);
+  const [clips, setClips] = useState([{ start: "00:00:00", end: "00:00:30", summary: "" }]);
   const [watermarkOn, setWatermarkOn] = useState(true);
   const [wmText, setWmText] = useState("@ClippedBySal");
 
@@ -122,11 +122,35 @@ export default function Clipper() {
 }
 
   // ---------- clip helpers ----------
+  function secsToHMS(s) {
+    s = Math.max(0, Math.round(s));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const r = s % 60;
+    return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(r).padStart(2,"0")}`;
+  }
+
   function addClip() {
     if (clips.length >= 5) return;
-    setClips([...clips, { start: "00:00:00", end: "00:00:10", summary: "" }]);
+    // Start new clip from where the last one ends
+    const lastEnd = clips.length > 0 ? timeToSeconds(clips[clips.length - 1].end) : 0;
+    const newStart = lastEnd;
+    const newEnd = newStart + 30;
+    setClips([...clips, { start: secsToHMS(newStart), end: secsToHMS(newEnd), summary: "" }]);
   }
-  function updateClip(i, k, v) { const n=[...clips]; n[i][k]=v; setClips(n); }
+  function updateClip(i, k, v) {
+    const n = [...clips];
+    n[i][k] = v;
+    // If start was changed and now end <= start, push end to start + 30s
+    if (k === "start") {
+      const startSec = timeToSeconds(v);
+      const endSec = timeToSeconds(n[i].end);
+      if (endSec <= startSec) {
+        n[i].end = secsToHMS(startSec + 30);
+      }
+    }
+    setClips(n);
+  }
   function cancelClip(i) { setClips(clips.filter((_, idx) => idx !== i)); }
   function cancelAll() { setClips([]); setClipMsg(""); }
 
