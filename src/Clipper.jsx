@@ -33,6 +33,9 @@ export default function Clipper() {
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState("");
   const [clipMsg, setClipMsg] = useState("");
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [upgradeMsg, setUpgradeMsg] = useState("");
+  const [upgrading, setUpgrading] = useState(false);
 
   const [clips, setClips] = useState([{ start: "00:00:00", end: "00:00:30", summary: "" }]);
   const [watermarkOn, setWatermarkOn] = useState(true);
@@ -60,6 +63,28 @@ export default function Clipper() {
   async function handleLogout() {
     await supabase.auth.signOut();
     window.location.href = "/";
+  }
+
+  async function handleUpgrade() {
+    try {
+      setUpgrading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      const fd = new FormData();
+      fd.append("email", user?.email || "");
+      const res = await fetch(`${API_BASE}/billing/checkout`, { method: "POST", body: fd });
+      const data = await res.json();
+      if (data.ok && data.url) {
+        window.location.href = data.url;
+      } else {
+        setError("Could not start checkout. Please try again.");
+        setShowUpgradeModal(false);
+      }
+    } catch (e) {
+      setError("Checkout failed: " + e.message);
+      setShowUpgradeModal(false);
+    } finally {
+      setUpgrading(false);
+    }
   }
 
   // ---------- transcribe (file or URL) ----------
@@ -189,6 +214,12 @@ export default function Clipper() {
 
       const res = await fetch(`${API_BASE}/clip_multi`, { method: "POST", body: fd });
       const data = await res.json();
+      if (res.status === 403 && data.upgrade) {
+        setUpgradeMsg(data.error || "Upgrade to continue clipping.");
+        setShowUpgradeModal(true);
+        setIsBusy(false);
+        return;
+      }
       if (!res.ok || !data.ok) throw new Error(data.error || "Multi-clip failed");
 
       setGenerated(Array.isArray(data.items) ? data.items : []);
@@ -387,6 +418,12 @@ function tplHashtags() {
             >
               📋 History
             </a>
+            <button
+              onClick={() => { setUpgradeMsg("Unlock unlimited clips for $9.99/month."); setShowUpgradeModal(true); }}
+              className="bg-emerald-500 hover:bg-emerald-600 px-3 py-1 rounded text-white font-medium"
+            >
+              ⚡ Upgrade
+            </button>
             <button onClick={handleLogout} className="bg-indigo-600 hover:bg-indigo-700 px-3 py-1 rounded text-slate-800">
               Logout
             </button>
@@ -654,6 +691,54 @@ function tplHashtags() {
           </div>
         </div>
       </div>
+
+      {/* Upgrade success banner */}
+      {new URLSearchParams(window.location.search).get("upgrade") === "success" && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-emerald-500 text-white px-6 py-3 rounded-xl shadow-lg font-medium">
+          🎉 You're now on ClipForge Pro! Unlimited clips unlocked.
+        </div>
+      )}
+
+      {/* Upgrade Modal */}
+      {showUpgradeModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md mx-4">
+            <div className="text-center mb-6">
+              <div className="text-4xl mb-3">⚡</div>
+              <h2 className="text-2xl font-bold text-slate-800 mb-2">Upgrade to Pro</h2>
+              <p className="text-slate-500 text-sm">{upgradeMsg}</p>
+            </div>
+
+            <div className="bg-indigo-50 rounded-xl p-4 mb-6 border border-indigo-100">
+              <div className="flex items-center justify-between mb-3">
+                <span className="font-semibold text-slate-800">ClipForge Pro</span>
+                <span className="text-2xl font-bold text-indigo-600">$9.99<span className="text-sm font-normal text-slate-500">/mo</span></span>
+              </div>
+              <ul className="space-y-2 text-sm text-slate-600">
+                <li className="flex items-center gap-2"><span className="text-emerald-500">✓</span> 7-day free trial — no charge today</li>
+                <li className="flex items-center gap-2"><span className="text-emerald-500">✓</span> Unlimited clips per day</li>
+                <li className="flex items-center gap-2"><span className="text-emerald-500">✓</span> AI hooks, titles & hashtags</li>
+                <li className="flex items-center gap-2"><span className="text-emerald-500">✓</span> Full transcript history</li>
+                <li className="flex items-center gap-2"><span className="text-emerald-500">✓</span> Cancel anytime</li>
+              </ul>
+            </div>
+
+            <button
+              onClick={handleUpgrade}
+              disabled={upgrading}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-semibold py-3 rounded-xl mb-3 transition-colors"
+            >
+              {upgrading ? "Redirecting to checkout..." : "Start Free Trial →"}
+            </button>
+            <button
+              onClick={() => setShowUpgradeModal(false)}
+              className="w-full text-slate-400 hover:text-slate-600 text-sm py-2"
+            >
+              Maybe later
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Modal Preview (same page) */}
       {previewOpen && (
