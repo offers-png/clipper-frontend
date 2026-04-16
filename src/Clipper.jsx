@@ -353,6 +353,12 @@ function tplHashtags() {
             >
               {aiOpen ? "Hide Assistant" : "Show Assistant"}
             </button>
+            <a
+              href="/dashboard"
+              className="bg-[#24304A] hover:bg-[#2c3b5c] px-3 py-1 rounded text-white"
+            >
+              📋 History
+            </a>
             <button onClick={handleLogout} className="bg-[#6C5CE7] hover:bg-[#5A4ED1] px-3 py-1 rounded text-white">
               Logout
             </button>

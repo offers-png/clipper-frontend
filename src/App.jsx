@@ -1,9 +1,9 @@
-// test
 // src/App.jsx
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import AuthForm from "./AuthForm";        // or "./Login" / "./LoginPage" if you used that name
+import AuthForm from "./AuthForm";
 import Clipper from "./Clipper";
+import Dashboard from "./Dashboard";
 import ProtectedRoute from "./ProtectedRoute";
 
 export default function App() {
@@ -19,6 +19,16 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Clipper />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* History dashboard (requires auth) */}
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
             </ProtectedRoute>
           }
         />
