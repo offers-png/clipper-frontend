@@ -103,14 +103,10 @@ export default function Clipper() {
 
     setTranscript(data.text || "(no text)");
     
-    // ✅ Get the latest record ID from history
-    if (data.saved_to_db) {
-      const historyRes = await fetch(`${API_BASE}/history/${userId}?limit=1`);
-      const historyData = await historyRes.json();
-      if (historyData.history && historyData.history.length > 0) {
-        setCurrentRecordId(historyData.history[0].id);
-        console.log("✅ Record ID saved:", historyData.history[0].id);
-      }
+    // ✅ Set record ID directly from response
+    if (data.record_id) {
+      setCurrentRecordId(data.record_id);
+      console.log("✅ Record ID saved:", data.record_id);
     }
 
     setAiMsgs(m => [
@@ -172,6 +168,10 @@ export default function Clipper() {
       if (!res.ok || !data.ok) throw new Error(data.error || "Multi-clip failed");
 
       setGenerated(Array.isArray(data.items) ? data.items : []);
+      if (data.record_id) {
+        setCurrentRecordId(data.record_id);
+        console.log("✅ Clip record ID:", data.record_id);
+      }
       setClipMsg("✅ All clips processed.");
       setMode("clip"); // jump to clip view
     } catch (e) { setError(e.message); }
