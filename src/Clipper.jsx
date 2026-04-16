@@ -163,6 +163,10 @@ export default function Clipper() {
       fd.append("preview_480", "1");
       fd.append("final_1080", "0");
 
+      // send user identity for history logging
+      const { data: { user: clipUser } } = await supabase.auth.getUser();
+      fd.append("user_id", clipUser?.email || "anonymous");
+
       const res = await fetch(`${API_BASE}/clip_multi`, { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok || !data.ok) throw new Error(data.error || "Multi-clip failed");
