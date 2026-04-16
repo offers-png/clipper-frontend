@@ -479,7 +479,7 @@ function tplHashtags() {
               <button
                 onClick={handleTranscribe}
                 disabled={isBusy}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-slate-800 rounded-lg py-2 disabled:opacity-60"
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg py-2 disabled:opacity-60"
               >{isBusy ? "Processing..." : "Upload & Transcribe"}</button>
 
               {!!transcript && (
@@ -509,6 +509,18 @@ function tplHashtags() {
           {/* === CLIP MODE === */}
           {mode==="clip" && (
             <>
+              <div className="mb-3">
+                <label className="block text-sm font-medium text-slate-700 mb-1">Or paste a direct video/audio URL (MP4, MP3, TikTok, etc.)</label>
+                <input
+                  type="url"
+                  value={url}
+                  onChange={e=>setUrl(e.target.value)}
+                  placeholder="https://..."
+                  className="w-full bg-white border border-slate-300 rounded px-3 py-2 text-slate-800 focus:outline-none focus:border-indigo-400"
+                />
+                <p className="text-xs text-slate-400 mt-1">If a URL is provided, the file picker is ignored.</p>
+              </div>
+
               <div className="mb-3 text-sm text-slate-400">
                 Add up to 5 clip segments. Clip all at once to get previews (no page change).
               </div>
@@ -582,7 +594,7 @@ function tplHashtags() {
               <button
                 onClick={handleClipAll}
                 disabled={isBusy || clips.length===0}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-slate-800 rounded-lg py-2 disabled:opacity-60"
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg py-2 disabled:opacity-60"
               >{isBusy ? "Clipping..." : "Clip All"}</button>
 
               {!!clipMsg && <p className="text-emerald-600 text-sm mt-3">{clipMsg}</p>}
