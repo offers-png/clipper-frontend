@@ -170,7 +170,7 @@ export default function Clipper() {
   async function handleClipAll() {
     try {
       resetMessages();
-      if (!file && !url) return setError("Select a video file first.");
+      if (!file && !url) return setError("Select a video file or paste a URL first.");
       if (clips.length === 0) return setError("No clips added.");
       setIsBusy(true);
 
@@ -423,6 +423,18 @@ function tplHashtags() {
           {/* === TRANSCRIBE MODE === */}
           {mode==="transcribe" && (
             <>
+              <div className="mb-3">
+                <label className="block text-sm font-medium text-slate-700 mb-1">Or paste a direct video/audio URL (MP4, MP3, TikTok, etc.)</label>
+                <input
+                  type="url"
+                  value={url}
+                  onChange={e=>setUrl(e.target.value)}
+                  placeholder="https://..."
+                  className="w-full bg-white border border-slate-300 rounded px-3 py-2 text-slate-800 focus:outline-none focus:border-indigo-400"
+                />
+                <p className="text-xs text-slate-400 mt-1">If a URL is provided, the file picker is ignored.</p>
+              </div>
+
               <div className="mb-4">
                 <TemplateBar />
               </div>
