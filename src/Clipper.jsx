@@ -86,7 +86,7 @@ export default function Clipper() {
     }
     else {
       if (!file) {
-        setError("Choose a file or paste a URL.");
+        setError("Upload a video or audio file first.");
         setIsBusy(false);
         return;
       }
@@ -170,7 +170,7 @@ export default function Clipper() {
   async function handleClipAll() {
     try {
       resetMessages();
-      if (!file && !url) return setError("Select a video OR paste a URL first.");
+      if (!file && !url) return setError("Select a video file first.");
       if (clips.length === 0) return setError("No clips added.");
       setIsBusy(true);
 
@@ -291,27 +291,27 @@ async function transcribeClipByUrl(clipUrl) {
 }
 
   function tplSummarize() {
-  if (!transcript) return setError("Transcribe first or paste a URL.");
+  if (!transcript) return setError("Transcribe your video first.");
   askAI("Summarize the transcript into 5 bullet points with key takeaways.", "summary");
 }
 
 function tplTitles() {
-  if (!transcript) return setError("Transcribe first or paste a URL.");
+  if (!transcript) return setError("Transcribe your video first.");
   askAI("Write 5 viral, punchy titles (max 60 chars each) based on this transcript.", "titles");
 }
 
 function tplHooks() {
-  if (!transcript) return setError("Transcribe first or paste a URL.");
-  askAI("Give me 7 short opening hooks (under 80 chars) tailored for Shorts/TikTok.", "hooks");
+  if (!transcript) return setError("Transcribe your video first.");
+  askAI("Give me 7 short opening hooks (under 80 chars) tailored for Reels & Shorts.", "hooks");
 }
 
 function tplHashtags() {
-  if (!transcript) return setError("Transcribe first or paste a URL.");
+  if (!transcript) return setError("Transcribe your video first.");
   askAI("Suggest 10 relevant hashtags + 10 SEO keywords for this content.", "hashtags");
 }
   async function tplBestMoments() {
     try {
-      if (!transcript) return setError("Transcribe first or paste a URL.");
+      if (!transcript) return setError("Transcribe your video first.");
       setAiBusy(true);
       const fd = new FormData();
       fd.append("transcript", transcript);
@@ -353,16 +353,16 @@ function tplHashtags() {
 
   // ---------- UI ----------
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#0B1020] via-[#12182B] to-[#1C2450] text-white">
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-indigo-50 to-slate-200 text-slate-800">
       {/* Header */}
-      <div className="border-b border-[#27324A] bg-[#0B1020] sticky top-0 z-30">
+      <div className="border-b border-slate-200 bg-white/80 backdrop-blur-sm sticky top-0 z-30 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img src={logo} alt="ClipForge AI" className="h-8 w-8" />
-            <div className="text-lg font-semibold tracking-wide">ClipForge AI</div>
+            <div className="text-lg font-semibold tracking-wide text-slate-800">ClipForge AI</div>
           </div>
           <div className="flex items-center gap-3 text-sm">
-            <label className="flex items-center gap-2">
+            <label className="flex items-center gap-2 text-slate-600">
               <input type="checkbox" checked={watermarkOn} onChange={e=>setWatermarkOn(e.target.checked)} />
               Watermark
             </label>
@@ -371,23 +371,23 @@ function tplHashtags() {
                 value={wmText}
                 onChange={e=>setWmText(e.target.value)}
                 placeholder="@YourHandle"
-                className="bg-[#12182B] border border-[#27324A] text-white text-xs rounded-md px-2 py-1 w-40 outline-none"
+                className="bg-slate-100 border border-slate-300 text-slate-800 text-xs rounded-md px-2 py-1 w-40 outline-none"
               />
             )}
             <button
               onClick={()=>setAiOpen(v=>!v)}
-              className="bg-[#24304A] hover:bg-[#2c3b5c] px-3 py-1 rounded"
+              className="bg-slate-100 hover:bg-slate-200 border border-slate-300 px-3 py-1 rounded text-slate-700"
               title={aiOpen ? "Hide AI Assistant" : "Show AI Assistant"}
             >
               {aiOpen ? "Hide Assistant" : "Show Assistant"}
             </button>
             <a
               href="/dashboard"
-              className="bg-[#24304A] hover:bg-[#2c3b5c] px-3 py-1 rounded text-white"
+              className="bg-slate-100 hover:bg-slate-200 border border-slate-300 px-3 py-1 rounded text-slate-700"
             >
               📋 History
             </a>
-            <button onClick={handleLogout} className="bg-[#6C5CE7] hover:bg-[#5A4ED1] px-3 py-1 rounded text-white">
+            <button onClick={handleLogout} className="bg-indigo-600 hover:bg-indigo-700 px-3 py-1 rounded text-slate-800">
               Logout
             </button>
           </div>
@@ -401,36 +401,28 @@ function tplHashtags() {
           {/* Tabs */}
           <div className="flex gap-2 mb-6">
             <button
-              className={`px-4 py-2 rounded-lg border ${mode==="transcribe" ? "bg-[#6C5CE7] border-[#6C5CE7]" : "border-[#27324A] bg-[#12182B]"}`}
+              className={`px-4 py-2 rounded-lg border font-medium ${mode==="transcribe" ? "bg-indigo-600 border-indigo-600 text-slate-800" : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"}`}
               onClick={()=>setMode("transcribe")}
             >Transcribe</button>
             <button
-              className={`px-4 py-2 rounded-lg border ${mode==="clip" ? "bg-[#6C5CE7] border-[#6C5CE7]" : "border-[#27324A] bg-[#12182B]"}`}
+              className={`px-4 py-2 rounded-lg border font-medium ${mode==="clip" ? "bg-indigo-600 border-indigo-600 text-slate-800" : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"}`}
               onClick={()=>setMode("clip")}
             >Clip</button>
           </div>
 
-          {/* File / URL */}
+          {/* File upload */}
           <div className="mb-4">
-            <input type="file" accept="audio/*,video/*" onChange={e=>setFile(e.target.files?.[0]||null)} />
-            {file && <p className="text-xs text-gray-400 mt-1">Selected: {file.name}</p>}
+            <label className="block w-full border-2 border-dashed border-slate-300 rounded-xl p-6 text-center cursor-pointer hover:border-indigo-400 hover:bg-indigo-50 transition-colors bg-white">
+              <div className="text-2xl mb-1">📁</div>
+              <div className="text-sm font-medium text-slate-700">{file ? file.name : "Click to upload video or audio"}</div>
+              <div className="text-xs text-slate-400 mt-1">MP4, MOV, MP3, WAV supported</div>
+              <input type="file" accept="audio/*,video/*" onChange={e=>setFile(e.target.files?.[0]||null)} className="hidden" />
+            </label>
           </div>
 
           {/* === TRANSCRIBE MODE === */}
           {mode==="transcribe" && (
             <>
-              <div className="mb-3">
-                <label className="block text-sm font-medium mb-1">Or paste a URL (YouTube/TikTok/MP3/MP4)</label>
-                <input
-                  type="url"
-                  value={url}
-                  onChange={e=>setUrl(e.target.value)}
-                  placeholder="https://..."
-                  className="w-full bg-[#12182B] border border-[#27324A] rounded px-3 py-2 text-white"
-                />
-                <p className="text-xs text-gray-400 mt-1">If a URL is provided, the file picker is ignored.</p>
-              </div>
-
               <div className="mb-4">
                 <TemplateBar />
               </div>
@@ -438,11 +430,11 @@ function tplHashtags() {
               <button
                 onClick={handleTranscribe}
                 disabled={isBusy}
-                className="w-full bg-[#6C5CE7] hover:bg-[#5A4ED1] text-white rounded-lg py-2 disabled:opacity-60"
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-slate-800 rounded-lg py-2 disabled:opacity-60"
               >{isBusy ? "Processing..." : "Upload & Transcribe"}</button>
 
               {!!transcript && (
-                <div className="mt-5 border border-[#27324A] rounded-lg p-3 bg-[#12182B] relative">
+                <div className="mt-5 border border-slate-200 rounded-lg p-3 bg-white relative">
                   <div className="font-semibold mb-1 pr-24">📝 Transcript</div>
                   <button
                     onClick={async () => {
@@ -454,7 +446,7 @@ function tplHashtags() {
                         setError("Clipboard blocked — select text and copy manually.");
                       }
                     }}
-                    className="absolute top-3 right-3 text-xs bg-[#24304A] hover:bg-[#2c3b5c] px-2 py-1 rounded"
+                    className="absolute top-3 right-3 text-xs bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded"
                     title="Copy transcript"
                   >
                     {copied ? "Copied ✅" : "Copy"}
@@ -468,7 +460,7 @@ function tplHashtags() {
           {/* === CLIP MODE === */}
           {mode==="clip" && (
             <>
-              <div className="mb-3 text-sm text-gray-400">
+              <div className="mb-3 text-sm text-slate-400">
                 Add up to 5 clip segments. Clip all at once to get previews (no page change).
               </div>
 
@@ -478,14 +470,14 @@ function tplHashtags() {
 
               {/* form for creating sections */}
               {clips.map((c, idx)=>(
-                <div key={idx} className="border border-[#27324A] rounded-lg p-3 mb-3 bg-[#12182B]">
+                <div key={idx} className="border border-slate-200 rounded-lg p-3 mb-3 bg-white">
                   <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-medium text-sm text-white/80">🎬 Clip {idx+1}</h3>
+                    <h3 className="font-medium text-sm text-slate-700">🎬 Clip {idx+1}</h3>
                     <div className="flex gap-2">
                       <button
                         onClick={()=>cancelClip(idx)}
                         disabled={isBusy}
-                        className="text-xs bg-gray-500 hover:bg-gray-600 text-white px-2 py-1 rounded"
+                        className="text-xs bg-gray-500 hover:bg-gray-600 text-slate-800 px-2 py-1 rounded"
                       >Cancel</button>
                     </div>
                   </div>
@@ -496,18 +488,18 @@ function tplHashtags() {
                       value={c.start}
                       onChange={e=>updateClip(idx,"start",e.target.value)}
                       placeholder="Start (HH:MM:SS)"
-                      className="rounded border border-[#27324A] bg-[#0B1020] text-sm px-2 py-1 text-white"
+                      className="rounded border border-slate-200 bg-slate-50 text-sm px-2 py-1 text-slate-800"
                     />
                     <input
                       type="text"
                       value={c.end}
                       onChange={e=>updateClip(idx,"end",e.target.value)}
                       placeholder="End (HH:MM:SS)"
-                      className="rounded border border-[#27324A] bg-[#0B1020] text-sm px-2 py-1 text-white"
+                      className="rounded border border-slate-200 bg-slate-50 text-sm px-2 py-1 text-slate-800"
                     />
                   </div>
 
-                  <div className="relative h-2 bg-[#27324A] rounded-full overflow-hidden mb-2">
+                  <div className="relative h-2 bg-slate-200 rounded-full overflow-hidden mb-2">
                     {(() => {
                       const s = timeToSeconds(c.start);
                       const e = timeToSeconds(c.end);
@@ -515,12 +507,12 @@ function tplHashtags() {
                       const sp = Math.min((s/total)*100, 100);
                       const ep = Math.min((e/total)*100, 100);
                       const w = Math.max(ep - sp, 2);
-                      return <div className="absolute h-full bg-[#6C5CE7]" style={{ left:`${sp}%`, width:`${w}%` }} />;
+                      return <div className="absolute h-full bg-indigo-600" style={{ left:`${sp}%`, width:`${w}%` }} />;
                     })()}
                   </div>
-                  <p className="text-xs text-gray-400 text-center">{c.start} → {c.end}</p>
+                  <p className="text-xs text-slate-400 text-center">{c.start} → {c.end}</p>
 
-                  <div className="mt-3 text-xs text-gray-300 bg-[#0F172A] rounded p-2">
+                  <div className="mt-3 text-xs text-gray-300 bg-slate-50 rounded p-2">
                     <div className="font-semibold mb-1">Snippet</div>
                     <div className="line-clamp-3">
                       {c.summary || (transcript ? transcript.slice(0, 240) : "— No transcript available for this range —")}
@@ -530,10 +522,10 @@ function tplHashtags() {
               ))}
 
               <div className="flex justify-between items-center mb-4">
-                <button onClick={addClip} disabled={clips.length>=5} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded disabled:opacity-50">
+                <button onClick={addClip} disabled={clips.length>=5} className="bg-emerald-600 hover:bg-emerald-700 text-slate-800 px-4 py-2 rounded disabled:opacity-50">
                   + Add Clip
                 </button>
-                <button onClick={cancelAll} className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-2 rounded">
+                <button onClick={cancelAll} className="bg-gray-500 hover:bg-gray-600 text-slate-800 px-3 py-2 rounded">
                   Cancel All
                 </button>
               </div>
@@ -541,11 +533,11 @@ function tplHashtags() {
               <button
                 onClick={handleClipAll}
                 disabled={isBusy || clips.length===0}
-                className="w-full bg-[#6C5CE7] hover:bg-[#5A4ED1] text-white rounded-lg py-2 disabled:opacity-60"
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-slate-800 rounded-lg py-2 disabled:opacity-60"
               >{isBusy ? "Clipping..." : "Clip All"}</button>
 
-              {!!clipMsg && <p className="text-green-400 text-sm mt-3">{clipMsg}</p>}
-              {!!error && <p className="text-red-400 text-sm mt-3">{error}</p>}
+              {!!clipMsg && <p className="text-emerald-600 text-sm mt-3">{clipMsg}</p>}
+              {!!error && <p className="text-red-500 text-sm mt-3">{error}</p>}
 
               {/* Generated Clips — Netflix grid */}
               {generated.length > 0 && (
@@ -574,23 +566,23 @@ function tplHashtags() {
             </>
           )}
 
-          <div className="mt-10 text-center text-[10px] text-gray-500 select-none">
+          <div className="mt-10 text-center text-[10px] text-slate-400 select-none">
             © {new Date().getFullYear()} ClipForge AI • Watermark: {watermarkOn ? wmText : "off"}
           </div>
         </div>
 
         {/* RIGHT: AI assistant */}
         <div className={`${aiOpen ? "w-full md:w-[32rem]" : "w-0 md:w-0"} overflow-hidden transition-all duration-300`}>
-          <div className="border border-[#27324A] bg-[#12182B] rounded-lg h-full flex flex-col">
-            <div className="p-4 border-b border-[#27324A] flex items-center justify-between">
+          <div className="border border-slate-200 bg-white rounded-lg h-full flex flex-col">
+            <div className="p-4 border-b border-slate-200 flex items-center justify-between">
               <div className="font-semibold">🤖 ClipForge Assistant</div>
               <button
                 onClick={()=>setAiOpen(false)}
-                className="text-xs bg-[#24304A] hover:bg-[#2c3b5c] px-2 py-1 rounded"
+                className="text-xs bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded"
               >Hide</button>
             </div>
 
-            <div className="p-3 border-b border-[#27324A]">
+            <div className="p-3 border-b border-slate-200">
               <div className="flex flex-wrap gap-2">
                 <button onClick={tplBestMoments} disabled={aiBusy} className="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-sm">🎬 Moments</button>
                 <button onClick={tplTitles}      disabled={aiBusy} className="px-2.5 py-1 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-sm">✍️ Titles</button>
@@ -602,12 +594,12 @@ function tplHashtags() {
 
             <div className="flex-1 overflow-auto p-4 space-y-3">
               {aiMsgs.length === 0 && (
-                <div className="text-white/60 text-sm">
+                <div className="text-slate-500 text-sm">
                   Ask for summaries, titles, hooks—or “find the best 3 moments”.
                 </div>
               )}
               {aiMsgs.map((m, i) => (
-                <div key={i} className={`text-sm leading-6 ${m.role === 'assistant' ? 'text-white' : 'text-indigo-300'}`}>
+                <div key={i} className={`text-sm leading-6 ${m.role === 'assistant' ? 'text-slate-800' : 'text-indigo-700'}`}>
                   <span className="opacity-70 mr-1">{m.role === 'assistant' ? 'AI:' : 'You:'}</span>
                   {m.content}
                 </div>
@@ -615,13 +607,13 @@ function tplHashtags() {
               <div ref={aiBottomRef} />
             </div>
 
-            <div className="p-3 border-t border-[#27324A]">
+            <div className="p-3 border-t border-slate-200">
               <div className="flex gap-2">
                 <textarea
                   value={aiInput}
                   onChange={e => setAiInput(e.target.value)}
                   placeholder="Ask something about your transcript…"
-                  className="flex-1 bg-[#0B1020] border border-[#27324A] rounded p-2 text-sm"
+                  className="flex-1 bg-slate-50 border border-slate-200 rounded p-2 text-sm"
                   rows={2}
                 />
                 <button
@@ -635,13 +627,13 @@ function tplHashtags() {
               <div className="mt-2 flex gap-2">
                 <button
                   onClick={()=>setAiMsgs([])}
-                  className="text-xs bg-[#24304A] hover:bg-[#2c3b5c] px-2 py-1 rounded"
+                  className="text-xs bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded"
                 >
                   Clear Chat
                 </button>
                 <button
                   onClick={()=>setAiOpen(false)}
-                  className="text-xs bg-[#24304A] hover:bg-[#2c3b5c] px-2 py-1 rounded"
+                  className="text-xs bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded"
                 >
                   Collapse
                 </button>
@@ -654,12 +646,12 @@ function tplHashtags() {
       {/* Modal Preview (same page) */}
       {previewOpen && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-[#0B1020] border border-[#27324A] rounded-lg p-4 w-[90vw] max-w-3xl">
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 w-[90vw] max-w-3xl">
             <div className="flex items-center justify-between mb-3">
               <div className="font-semibold">Preview</div>
               <button
                 onClick={()=>{ setPreviewOpen(false); setPreviewSrc(""); }}
-                className="px-2 py-1 text-sm rounded bg-[#24304A] hover:bg-[#2c3b5c]"
+                className="px-2 py-1 text-sm rounded bg-slate-100 hover:bg-slate-200"
               >
                 Close
               </button>
