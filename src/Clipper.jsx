@@ -2,6 +2,7 @@
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "./supabaseClient";
 import logo from "./assets/react.svg";
+import {sessionHeaders, verifyBilling, verifiedPaid} from "./billingClient.mjs";
 import ClipCard from "./components/ClipCard.jsx";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "https://clipper-api-final-1.onrender.com";
@@ -36,6 +37,43 @@ export default function Clipper() {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [upgradeMsg, setUpgradeMsg] = useState("");
   const [upgrading, setUpgrading] = useState(false);
+  const [billing, setBilling] = useState(null);
+  const [billingMessage, setBillingMessage] = useState('');
+  const [billingChecking, setBillingChecking] = useState(false);
+  const billingRequest = useRef(0);
+
+  async function refreshBilling() {
+    const generation = ++billingRequest.current;
+    setBillingChecking(true);
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const result = await verifyBilling(supabase.auth, API_BASE, params.get('session_id'));
+      if (generation !== billingRequest.current) return;
+      setBilling(result);
+      setBillingMessage(result.plan === 'payment_pending'
+        ? 'Your subscription has a pending payment or needs attention. Do not start another subscription.' : '');
+      if (verifiedPaid(result)) {
+        setShowUpgradeModal(false);
+        if (params.has('session_id') || params.has('upgrade')) {
+          params.delete('session_id'); params.delete('upgrade');
+          history.replaceState({}, '', location.pathname + (params.size ? '?' + params.toString() : '') + location.hash);
+        }
+      }
+    } catch (error) {
+      if (generation === billingRequest.current) {
+        setBilling(null); setBillingMessage(error.message); setShowUpgradeModal(false);
+      }
+    } finally { if (generation === billingRequest.current) setBillingChecking(false); }
+  }
+
+  useEffect(() => {
+    refreshBilling();
+    const onFocus = () => refreshBilling();
+    window.addEventListener('focus', onFocus);
+    // Run outside the auth callback to avoid locking the Supabase auth client.
+    const {data} = supabase.auth.onAuthStateChange(() => setTimeout(onFocus, 0));
+    return () => { billingRequest.current++; window.removeEventListener('focus', onFocus); data.subscription?.unsubscribe(); };
+  }, []);
 
   const [clips, setClips] = useState([{ start: "00:00:00", end: "00:00:30", summary: "" }]);
   const [watermarkOn, setWatermarkOn] = useState(true);
@@ -68,15 +106,19 @@ export default function Clipper() {
   async function handleUpgrade() {
     try {
       setUpgrading(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      const fd = new FormData();
-      fd.append("email", user?.email || "");
-      const res = await fetch(`${API_BASE}/billing/checkout`, { method: "POST", body: fd });
+      const current = await verifyBilling(supabase.auth, API_BASE);
+      if (verifiedPaid(current)) {
+        setBilling(current); setShowUpgradeModal(false); return;
+      }
+      const headers = await sessionHeaders(supabase.auth);
+      const res = await fetch(`${API_BASE}/billing/checkout`, { method: "POST", headers });
       const data = await res.json();
-      if (data.ok && data.url) {
+      if (data.already_subscribed) {
+        await refreshBilling(); setShowUpgradeModal(false);
+      } else if (data.ok && data.url) {
         window.location.href = data.url;
       } else {
-        setError("Could not start checkout. Please try again.");
+        setError(data.error || "Could not verify checkout. Do not pay again.");
         setShowUpgradeModal(false);
       }
     } catch (e) {
@@ -212,7 +254,8 @@ export default function Clipper() {
       const { data: { user: clipUser } } = await supabase.auth.getUser();
       fd.append("user_id", clipUser?.email || "anonymous");
 
-      const res = await fetch(`${API_BASE}/clip_multi`, { method: "POST", body: fd });
+      const headers = await sessionHeaders(supabase.auth);
+      const res = await fetch(`${API_BASE}/clip_multi`, { method: "POST", headers, body: fd });
       const data = await res.json();
       if (res.status === 403 && data.upgrade) {
         setUpgradeMsg(data.error || "Upgrade to continue clipping.");
@@ -705,11 +748,16 @@ function tplHashtags() {
       </div>
 
       {/* Upgrade success banner */}
-      {new URLSearchParams(window.location.search).get("upgrade") === "success" && (
+      {verifiedPaid(billing) && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-emerald-500 text-white px-6 py-3 rounded-xl shadow-lg font-medium">
           🎉 You're now on ClipForge Pro! Unlimited clips unlocked.
         </div>
       )}
+
+      {(billingMessage || billingChecking) && <div role="status" className="fixed bottom-4 left-4 z-50 max-w-md rounded-xl bg-white text-slate-800 p-4 shadow-xl">
+        <p>{billingChecking ? 'Verifying subscription?' : billingMessage}</p>
+        {!billingChecking && <button type="button" onClick={refreshBilling} className="mt-2 text-indigo-600">Retry subscription verification</button>}
+      </div>}
 
       {/* Upgrade Modal */}
       {showUpgradeModal && (
