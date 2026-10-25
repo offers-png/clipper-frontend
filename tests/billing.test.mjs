@@ -10,9 +10,17 @@ test('billing requests use the current session and no caller email',async()=>{
     call={url,...options};return {ok:true,json:async()=>({ok:true,allowed:true,plan:'active',payment_verified:true})};
   });
   assert.equal(call.headers.Authorization,'Bearer contract-test');
+  assert.ok(call.body instanceof URLSearchParams);
   assert.equal(call.body.get('session_id'),'cs_fixture');
   assert.equal(call.body.has('email'),false);
   assert.equal(verifiedPaid(result),true);
+});
+test('login verification without checkout reference uses a non-multipart request',async()=>{
+  await verifyBilling(auth,'http://localhost:8000',null,async(_url,options)=>{
+    assert.ok(options.body instanceof URLSearchParams);
+    assert.equal(options.body.toString(),'');
+    return {ok:true,json:async()=>({ok:true})};
+  });
 });
 test('missing session never queries billing',async()=>{
   let queried=false;

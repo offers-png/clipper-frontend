@@ -6,7 +6,8 @@ export async function sessionHeaders(auth) {
 
 export async function verifyBilling(auth, api, sessionId = null, fetcher = fetch) {
   const headers = await sessionHeaders(auth);
-  const body = new FormData();
+  // Empty browser multipart forms crash the production-pinned legacy parser.
+  const body = new URLSearchParams();
   if (sessionId) body.append('session_id', sessionId);
   const response = await fetcher(`${api}/billing/check-access`, {method:'POST', headers, body});
   const result = await response.json();
