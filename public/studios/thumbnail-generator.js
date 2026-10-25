@@ -40,5 +40,15 @@ $('analyze-video').onclick=async()=>{
   gallery();$('generate-images').disabled=!(await capabilities()).image_generation.available;
  }catch(e){error(e)}finally{busy=false;$('analyze-video').disabled=false}
 };
-$('generate-images').onclick=async()=>{if(!job||busy)return;busy=true;$('generate-images').disabled=true;try{$('concept-progress').textContent='Generating three images…';const r=await api(`/thumbnail-ai/jobs/${job.id}/generate`,post({}));job.generated=r.images;gallery();$('concept-progress').textContent='Three generated images ready.'}catch(e){error(e)}finally{busy=false;$('generate-images').disabled=!(await capabilities()).image_generation.available}};
+$('generate-images').onclick=async()=>{if(!job||busy)return;busy=true;$('generate-images').disabled=true;try{
+ $('concept-progress').textContent='Generating three images on the backend…';
+ const r=await api(`/thumbnail-ai/jobs/${job.id}/generate`,post({}));
+ if(r.images){job.generated=r.images}else{
+  let result;
+  do{await new Promise(resolve=>setTimeout(resolve,1500));result=await api(`/thumbnail-ai/jobs/${job.id}`);$('concept-progress').textContent=`Generating thumbnails: ${result.generated?.length||0} / 3 ready`;if(result.generated?.length){job.generated=result.generated;gallery()}}while(['queued','running'].includes(result.generation_status));
+  if(result.generation_status!=='completed')throw Error(result.generation_error||'Thumbnail generation stopped. No automatic paid retry was attempted.');
+  job.generated=result.generated;
+ }
+ gallery();$('concept-progress').textContent='Three generated images ready.';
+}catch(e){error(e)}finally{busy=false;$('generate-images').disabled=!(await capabilities()).image_generation.available}};
 capabilities().catch(error);
