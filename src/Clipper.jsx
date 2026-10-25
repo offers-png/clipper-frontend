@@ -2,7 +2,7 @@
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "./supabaseClient";
 import logo from "./assets/react.svg";
-import {sessionHeaders, verifyBilling, verifiedPaid} from "./billingClient.mjs";
+import {sessionHeaders, verifyBilling, verifiedPaid, billingAction} from "./billingClient.mjs";
 import ClipCard from "./components/ClipCard.jsx";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "https://clipper-api-final-1.onrender.com";
@@ -41,38 +41,49 @@ export default function Clipper() {
   const [billingMessage, setBillingMessage] = useState('');
   const [billingChecking, setBillingChecking] = useState(false);
   const billingRequest = useRef(0);
+  const billingFlight = useRef(null);
 
-  async function refreshBilling() {
+  function refreshBilling() {
+    if (billingFlight.current) return billingFlight.current;
     const generation = ++billingRequest.current;
     setBillingChecking(true);
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const result = await verifyBilling(supabase.auth, API_BASE, params.get('session_id'));
-      if (generation !== billingRequest.current) return;
-      setBilling(result);
-      setBillingMessage(result.plan === 'payment_pending'
-        ? 'Your subscription has a pending payment or needs attention. Do not start another subscription.' : '');
-      if (verifiedPaid(result)) {
-        setShowUpgradeModal(false);
-        if (params.has('session_id') || params.has('upgrade')) {
-          params.delete('session_id'); params.delete('upgrade');
-          history.replaceState({}, '', location.pathname + (params.size ? '?' + params.toString() : '') + location.hash);
+    const operation = (async () => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const result = await verifyBilling(supabase.auth, API_BASE, params.get('session_id'));
+        if (generation !== billingRequest.current) return;
+        setBilling(result);
+        setBillingMessage(result.plan === 'payment_pending'
+          ? 'Your subscription has a pending payment or needs attention. Do not start another subscription.' : '');
+        if (verifiedPaid(result)) {
+          setShowUpgradeModal(false);
+          if (params.has('session_id') || params.has('upgrade')) {
+            params.delete('session_id'); params.delete('upgrade');
+            history.replaceState({}, '', location.pathname + (params.size ? '?' + params.toString() : '') + location.hash);
+          }
+        }
+      } catch (error) {
+        if (generation === billingRequest.current) {
+          setBilling(null); setBillingMessage(error.message); setShowUpgradeModal(false);
+        }
+      } finally {
+        if (generation === billingRequest.current) {
+          setBillingChecking(false); billingFlight.current = null;
         }
       }
-    } catch (error) {
-      if (generation === billingRequest.current) {
-        setBilling(null); setBillingMessage(error.message); setShowUpgradeModal(false);
-      }
-    } finally { if (generation === billingRequest.current) setBillingChecking(false); }
+    })();
+    billingFlight.current = operation;
+    return operation;
   }
 
   useEffect(() => {
     refreshBilling();
-    const onFocus = () => refreshBilling();
+    let disposed = false;
+    const onFocus = () => { if (!disposed) refreshBilling(); };
     window.addEventListener('focus', onFocus);
     // Run outside the auth callback to avoid locking the Supabase auth client.
     const {data} = supabase.auth.onAuthStateChange(() => setTimeout(onFocus, 0));
-    return () => { billingRequest.current++; window.removeEventListener('focus', onFocus); data.subscription?.unsubscribe(); };
+    return () => { disposed = true; billingRequest.current++; billingFlight.current = null; window.removeEventListener('focus', onFocus); data.subscription?.unsubscribe(); };
   }, []);
 
   const [clips, setClips] = useState([{ start: "00:00:00", end: "00:00:30", summary: "" }]);
@@ -461,12 +472,16 @@ function tplHashtags() {
             >
               📋 History
             </a>
-            <button
-              onClick={() => { setUpgradeMsg("Unlock unlimited clips for $9.99/month."); setShowUpgradeModal(true); }}
+            {['paid', 'trial'].includes(billingAction(billing)) ? <span role="status" className="bg-emerald-100 px-3 py-1 rounded text-emerald-800 font-medium">{billingAction(billing) === 'paid' ? 'Pro active' : 'Trial active'}</span> : <button
+              disabled={billingChecking}
+              onClick={() => {
+                if (billingAction(billing) === 'verify') { refreshBilling(); return; }
+                setUpgradeMsg("Unlock unlimited clips for $9.99/month."); setShowUpgradeModal(true);
+              }}
               className="bg-emerald-500 hover:bg-emerald-600 px-3 py-1 rounded text-white font-medium"
             >
-              ⚡ Upgrade
-            </button>
+              {billingChecking ? 'Verifying plan…' : billingAction(billing) === 'verify' ? 'Verify subscription' : '⚡ Upgrade'}
+            </button>}
             <button onClick={handleLogout} className="bg-indigo-600 hover:bg-indigo-700 px-3 py-1 rounded text-slate-800">
               Logout
             </button>

@@ -1,9 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {sessionHeaders, verifyBilling, verifiedPaid} from '../src/billingClient.mjs';
+import {sessionHeaders, verifyBilling, verifiedPaid, billingAction} from '../src/billingClient.mjs';
 
 const auth={getSession:async()=>({data:{session:{access_token:'contract-test'}}})};
+test('verified paid accounts display paid status instead of an upgrade action',()=>{
+  assert.equal(billingAction({allowed:true,plan:'active',payment_verified:true}),'paid');
+});
+test('existing Stripe trials display trial status without inventing payment',()=>{
+  const trial={plan:'trial',allowed:true,existing_subscription:true,subscription_status:'trialing',payment_verified:false};
+  assert.equal(billingAction(trial),'trial');assert.equal(verifiedPaid(trial),false);
+  assert.equal(billingAction({...trial,allowed:false}),'trial');
+});
+test('unknown, unverified and pending accounts request verification, never another payment',()=>{
+  for (const state of [null,{plan:'active',allowed:true},{plan:'unknown'},{plan:'payment_pending'}]) {
+    assert.equal(billingAction(state),'verify');
+  }
+});
+test('known unpaid plans retain the existing upgrade option',()=>{
+  for (const plan of ['trial','expired','cancelled']) assert.equal(billingAction({plan}),'upgrade');
+});
 test('billing requests use the current session and no caller email',async()=>{
   let call;
   const result=await verifyBilling(auth,'http://localhost:8000','cs_fixture',async(url,options)=>{
@@ -26,6 +42,21 @@ test('missing session never queries billing',async()=>{
   let queried=false;
   await assert.rejects(verifyBilling({getSession:async()=>({data:{session:null}})},'http://localhost',null,async()=>{queried=true}),/sign in/i);
   assert.equal(queried,false);
+});
+test('hung billing fetch stops waiting and aborts without granting access',async()=>{
+  let signal;
+  await assert.rejects(verifyBilling(auth,'http://localhost',null,async(_url,options)=>{
+    signal=options.signal;return new Promise(()=>{});
+  },10),/timed out.*do not pay again/i);
+  assert.equal(signal.aborted,true);
+});
+test('hung session lookup also has a deadline and sends no request',async()=>{
+  let queried=false;
+  await assert.rejects(verifyBilling({getSession:()=>new Promise(()=>{})},'http://localhost',null,async()=>{queried=true},10),/timed out/i);
+  assert.equal(queried,false);
+});
+test('hung response body is bounded by the verification deadline',async()=>{
+  await assert.rejects(verifyBilling(auth,'http://localhost',null,async()=>({ok:true,json:()=>new Promise(()=>{})}),10),/timed out/i);
 });
 test('paid flags require explicit verified payment',()=>{
   for(const result of [null,{plan:'active',allowed:true},{plan:'trial',allowed:true,payment_verified:true},{plan:'active',allowed:false,payment_verified:true}]) {
