@@ -22,3 +22,15 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Secrets and development artifacts
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*service-account*.json
+.venv/
+__pycache__/
+*.pyc
+*.log
