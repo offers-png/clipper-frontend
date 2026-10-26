@@ -22,3 +22,10 @@ test('renamed navigation retains every existing deep link',()=>{
     assert.ok(source.includes(label));assert.ok(source.includes(path));
   }
 });
+
+test('production transcript workflow has no stale credential-free fixture controls',()=>{
+  const html=read('public/studios/transcript.html');
+  assert.doesNotMatch(html,/Isolated test interface|No authentication|fetch\('\/fixture'\)|id="fixture"/);
+  assert.match(html,/existing account access/);
+  assert.match(html,/id="file"/);assert.match(html,/id="create"/);
+});
