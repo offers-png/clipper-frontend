@@ -9,12 +9,21 @@ export default function StudioWorkspace({accessToken=null}){
   const [active,setActive]=useState(section),[visited,setVisited]=useState(()=>new Set([section()]));
   const refs=useRef({});
   const [backend,setBackend]=useState('checking');
+  const [capabilities,setCapabilities]=useState(null);
   const navigate=(key)=>{if(!views[key])return;setVisited(prev=>new Set([...prev,key]));setActive(key);history.pushState({},'',`/workspace/${key}`)};
   useEffect(()=>{
     const controller=new AbortController();
     fetch(api+'/health',{signal:controller.signal}).then(async r=>{const type=r.headers.get('content-type')||'';setBackend(r.ok&&type.includes('application/json')?'ready':r.status===404?'missing':'unavailable')}).catch(e=>{if(e.name!=='AbortError')setBackend('unavailable')});
     return()=>controller.abort();
   },[]);
+  useEffect(()=>{
+    if(backend!=='ready'||(!accessToken&&!settings.offline))return;
+    const controller=new AbortController();
+    fetch(api+'/studio/capabilities',{signal:controller.signal,headers:accessToken?{Authorization:'Bearer '+accessToken}:{}})
+      .then(async response=>{if(response.ok)setCapabilities(await response.json());})
+      .catch(()=>{});
+    return()=>controller.abort();
+  },[backend,accessToken]);
   const authenticateFrame=frame=>frame?.contentWindow.postMessage({type:'clipforge-studio-auth',api,accessToken,offline:settings.offline},location.origin);
   useEffect(()=>{Object.values(refs.current).forEach(authenticateFrame)},[accessToken]);
   useEffect(()=>{
@@ -34,6 +43,7 @@ export default function StudioWorkspace({accessToken=null}){
     <StudioNav active={active} navigate={navigate}/>
     {backend==='missing'&&<p role="alert" className="studio-api-notice">Studio processing is not enabled on this server yet. Manual thumbnail editing remains available; uploads and rendering need the Studio backend.</p>}
     {backend==='unavailable'&&<p role="alert" className="studio-api-notice">The Studio backend could not be reached. Your original ClipForge tools are still available.</p>}
+    {backend==='ready'&&capabilities&&(!capabilities.ai?.ready||!capabilities.transcription?.ready)&&<p role="status" className="studio-api-notice">Media processing is connected. {!capabilities.transcription?.ready?'Text-to-Clip and automatic speech captions need the server transcription model. ':''}{!capabilities.ai?.ready?'AI Highlights and generated hooks need the server analysis model. ':''}AI image/video generation requires a connected provider and is not enabled automatically.</p>}
     <main>{[...visited].map(key=><iframe key={key} hidden={active!==key} ref={el=>refs.current[key]=el} title={key==='editor'?'Video Editing Workspace':key+' Studio'} src={`/studios/${views[key]}?api=${encodeURIComponent(api)}`} onLoad={()=>{authenticateFrame(refs.current[key]);refs.current[key]?.contentWindow.postMessage({type:'editor-import-ready'},location.origin)}}/>)}</main>
   </div>;
 }
