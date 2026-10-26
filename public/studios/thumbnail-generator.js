@@ -1,5 +1,5 @@
-import {requestJson} from './request-json.js?v=account-20261026-5';
-import {confirmPaid} from './paid-confirm.js?v=account-20261026-5';
+import {requestJson} from './request-json.js?v=generator-20261026-1';
+import {confirmPaid} from './paid-confirm.js?v=generator-20261026-1';
 const $ = id => document.getElementById(id);
 let job = null, busy = false;
 const api=requestJson;

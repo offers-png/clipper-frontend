@@ -3,14 +3,16 @@ import './studios.css';
 import StudioNav from './StudioNav.jsx';
 import {studioSettings} from './studioSettings.mjs';
 const settings=studioSettings(import.meta.env,location.hostname),api=settings.api;
-const views={editor:'legacy.html',auto:'studio.html',transcript:'transcript.html',thumbnails:'thumbnails.html'};
+const frameKey=key=>key==='generator'?'editor':key;
+const views={generator:'legacy.html',editor:'legacy.html',auto:'studio.html',transcript:'transcript.html',thumbnails:'thumbnails.html'};
 const section=()=>location.pathname.split('/')[2] in views?location.pathname.split('/')[2]:'auto';
 export default function StudioWorkspace({accessToken=null}){
-  const [active,setActive]=useState(section),[visited,setVisited]=useState(()=>new Set([section()]));
+  const [active,setActive]=useState(section),[visited,setVisited]=useState(()=>new Set([frameKey(section())]));
   const refs=useRef({});
   const [backend,setBackend]=useState('checking');
   const [capabilities,setCapabilities]=useState(null);
-  const navigate=(key)=>{if(!views[key])return;setVisited(prev=>new Set([...prev,key]));setActive(key);history.pushState({},'',`/workspace/${key}`)};
+  useEffect(()=>{if(active==='generator')setTimeout(()=>refs.current.editor?.contentWindow.postMessage({type:'clipforge-focus-generator'},location.origin),150)},[active]);
+  const navigate=(key)=>{if(!views[key])return;setVisited(prev=>new Set([...prev,frameKey(key)]));setActive(key);history.pushState({},'',`/workspace/${key}`)};
   useEffect(()=>{
     const controller=new AbortController();
     fetch(api+'/health',{signal:controller.signal}).then(async r=>{const type=r.headers.get('content-type')||'';setBackend(r.ok&&type.includes('application/json')?'ready':r.status===404?'missing':'unavailable')}).catch(e=>{if(e.name!=='AbortError')setBackend('unavailable')});
@@ -34,15 +36,15 @@ export default function StudioWorkspace({accessToken=null}){
         setTimeout(()=>refs.current.editor?.contentWindow.postMessage({type:'editor-import-ready'},location.origin),100);
       }else if(e.data?.type==='clipforge-navigate')navigate(e.data.section);
     };
-    const back=()=>{setVisited(prev=>new Set([...prev,section()]));setActive(section())};
+    const back=()=>{setVisited(prev=>new Set([...prev,frameKey(section())]));setActive(section())};
     window.addEventListener('message',receive);window.addEventListener('popstate',back);
     return()=>{window.removeEventListener('message',receive);window.removeEventListener('popstate',back)};
   },[accessToken]);
-  useEffect(()=>{for(const [key,f] of Object.entries(refs.current)){if(key!==active)try{f?.contentDocument?.querySelectorAll('video,audio').forEach(v=>v.pause())}catch{}}},[active]);
+  useEffect(()=>{for(const [key,f] of Object.entries(refs.current)){if(key!==frameKey(active))try{f?.contentDocument?.querySelectorAll('video,audio').forEach(v=>v.pause())}catch{}}},[active]);
   return <div className="studio-workspace"><header><strong>CF · ClipForge Unified Workspace</strong><span>{settings.offline?'LOCAL DEVELOPMENT':'Your creative workspace'}</span></header>
     <StudioNav active={active} navigate={navigate}/>
     {backend==='missing'&&<p role="alert" className="studio-api-notice">Studio processing is not enabled on this server yet. Manual thumbnail editing remains available; uploads and rendering need the Studio backend.</p>}
     {backend==='unavailable'&&<p role="alert" className="studio-api-notice">The Studio backend could not be reached. Your original ClipForge tools are still available.</p>}
-    <main>{[...visited].map(key=><iframe key={key} hidden={active!==key} ref={el=>refs.current[key]=el} title={key==='editor'?'Video Editing Workspace':key+' Studio'} src={`/studios/${views[key]}?api=${encodeURIComponent(api)}&v=account-20261026-5`} onLoad={()=>{authenticateFrame(refs.current[key]);refs.current[key]?.contentWindow.postMessage({type:'editor-import-ready'},location.origin)}}/>)}</main>
+    <main>{[...visited].map(key=><iframe key={key} hidden={frameKey(active)!==key} ref={el=>refs.current[key]=el} title={key==='editor'?'Video Editing Workspace':key+' Studio'} src={`/studios/${views[key]}?api=${encodeURIComponent(api)}&v=generator-20261026-1`} onLoad={()=>{authenticateFrame(refs.current[key]);if(active==='generator')refs.current[key]?.contentWindow.postMessage({type:'clipforge-focus-generator'},location.origin);refs.current[key]?.contentWindow.postMessage({type:'editor-import-ready'},location.origin)}}/>)}</main>
   </div>;
 }
