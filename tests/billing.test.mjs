@@ -1,9 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {sessionHeaders, verifyBilling, verifiedPaid, billingAction} from '../src/billingClient.mjs';
+import {sessionHeaders, verifyBilling, verifiedPaid, billingAction,ownerDevelopment} from '../src/billingClient.mjs';
 
 const auth={getSession:async()=>({data:{session:{access_token:'contract-test'}}})};
+test('owner development is unlimited access without inventing a paid subscription',()=>{
+  const owner={allowed:true,plan:'owner_development',owner_development:true,payment_verified:false};
+  assert.equal(billingAction(owner),'owner');assert.equal(ownerDevelopment(owner),true);assert.equal(verifiedPaid(owner),false);
+  assert.equal(ownerDevelopment({...owner,allowed:false}),false);
+  assert.equal(ownerDevelopment({...owner,owner_development:false}),false);
+});
 test('verified paid accounts display paid status instead of an upgrade action',()=>{
   assert.equal(billingAction({allowed:true,plan:'active',payment_verified:true}),'paid');
 });

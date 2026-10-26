@@ -1,11 +1,12 @@
-import {confirmPaid} from './paid-confirm.js?v=account-20261026-4';
+import {requestJson} from './request-json.js?v=account-20261026-5';
+import {confirmPaid} from './paid-confirm.js?v=account-20261026-5';
 const $=id=>document.getElementById(id);
 const response=await fetch('/studios/editor-panel.html');
 const host=document.createElement('div');host.innerHTML=await response.text();
 document.querySelector('main').insertBefore(host,document.querySelector('main section:nth-of-type(2)'));
 const style=document.createElement('style');style.textContent='#video-editor .row{align-items:flex-end}#video-editor label{margin:3px 8px 3px 0}#video-editor input[type=number]{width:86px}#video-editor textarea{min-width:200px}#video-editor .row strong{max-width:250px;overflow-wrap:anywhere}#video-editor h3{margin-top:24px}#video-editor input[type=checkbox]{width:auto}#image-video-panel label:has(textarea){display:block;width:100%}#image-video-panel textarea{display:block;width:100%}#video-editor label,#image-video-panel label{max-width:100%}#video-editor input,#video-editor select,#image-video-panel input{max-width:100%}#editor-library{width:100%;max-width:650px}#editor-progress{accent-color:#235840}#image-video-panel img[hidden]{display:none!important}';document.head.append(style);
 let library=[],segments=[],tracks=[],overlays=[],texts=[],rendering=false,ivImage=null,ivGenerated=null;
-async function api(url,options){const r=await fetch(url,options),d=await r.json();if(!r.ok)throw Error(typeof d.detail==='string'?d.detail:JSON.stringify(d.detail));return d}
+const api=requestJson;
 const post=body=>({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
 function fail(e){$('editor-error').textContent=e.message||String(e)}
 function selected(){const a=library.find(a=>a.id===$('editor-library').value);if(!a)throw Error('Select an uploaded asset from the media library');return a}

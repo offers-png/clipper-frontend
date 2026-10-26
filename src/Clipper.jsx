@@ -2,7 +2,7 @@
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "./supabaseClient";
 import logo from "./assets/react.svg";
-import {sessionHeaders, verifyBilling, verifiedPaid, billingAction} from "./billingClient.mjs";
+import {sessionHeaders, verifyBilling, verifiedPaid, billingAction, ownerDevelopment} from "./billingClient.mjs";
 import ClipCard from "./components/ClipCard.jsx";
 import VideoPreview from './VideoPreview.jsx';
 
@@ -56,7 +56,7 @@ export default function Clipper() {
         setBilling(result);
         setBillingMessage(result.plan === 'payment_pending'
           ? 'Your subscription has a pending payment or needs attention. Do not start another subscription.' : '');
-        if (verifiedPaid(result)) {
+        if (verifiedPaid(result) || ownerDevelopment(result)) {
           setShowUpgradeModal(false);
           if (params.has('session_id') || params.has('upgrade')) {
             params.delete('session_id'); params.delete('upgrade');
@@ -119,7 +119,7 @@ export default function Clipper() {
     try {
       setUpgrading(true);
       const current = await verifyBilling(supabase.auth, API_BASE);
-      if (verifiedPaid(current)) {
+      if (verifiedPaid(current) || ownerDevelopment(current)) {
         setBilling(current); setShowUpgradeModal(false); return;
       }
       const headers = await sessionHeaders(supabase.auth);
@@ -473,7 +473,7 @@ function tplHashtags() {
             >
               📋 History
             </a>
-            {['paid', 'trial'].includes(billingAction(billing)) ? <span role="status" className="bg-emerald-100 px-3 py-1 rounded text-emerald-800 font-medium">{billingAction(billing) === 'paid' ? 'Pro active' : 'Trial active'}</span> : <button
+            {['owner', 'paid', 'trial'].includes(billingAction(billing)) ? <span role="status" className="bg-emerald-100 px-3 py-1 rounded text-emerald-800 font-medium">{billingAction(billing) === 'owner' ? 'Owner development ? Unlimited' : billingAction(billing) === 'paid' ? 'Pro active' : 'Trial active'}</span> : <button
               disabled={billingChecking}
               onClick={() => {
                 if (billingAction(billing) === 'verify') { refreshBilling(); return; }

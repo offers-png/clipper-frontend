@@ -30,7 +30,12 @@ export function verifiedPaid(result) {
   return result?.allowed === true && result?.plan === 'active' && result?.payment_verified === true;
 }
 
+export function ownerDevelopment(result) {
+  return result?.allowed === true && result?.plan === 'owner_development' && result?.owner_development === true;
+}
+
 export function billingAction(result) {
+  if (ownerDevelopment(result)) return 'owner';
   if (verifiedPaid(result)) return 'paid';
   if (result?.plan === 'trial' && result?.existing_subscription === true && result?.subscription_status === 'trialing') return 'trial';
   return ['trial', 'expired', 'cancelled', 'none'].includes(result?.plan) ? 'upgrade' : 'verify';

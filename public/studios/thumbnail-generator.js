@@ -1,11 +1,8 @@
-import {confirmPaid} from './paid-confirm.js?v=account-20261026-4';
+import {requestJson} from './request-json.js?v=account-20261026-5';
+import {confirmPaid} from './paid-confirm.js?v=account-20261026-5';
 const $ = id => document.getElementById(id);
 let job = null, busy = false;
-async function api(url, options) {
- const r = await fetch(url, options), data = await r.json();
- if (!r.ok) throw Error(typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail));
- return data;
-}
+const api=requestJson;
 const post = body => ({method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
 const delay = () => new Promise(resolve => setTimeout(resolve, 1200));
 function error(e) { $('concept-error').textContent = e.message; }
