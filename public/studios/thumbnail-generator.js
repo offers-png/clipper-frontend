@@ -1,3 +1,4 @@
+import {confirmPaid} from './paid-confirm.js?v=account-20261026-2';
 const $ = id => document.getElementById(id);
 let job = null, busy = false;
 async function api(url, options) {
@@ -92,12 +93,14 @@ $('generate-images').onclick = async () => {
  if (!job || busy || ['failed','completed','queued','running'].includes(job.generation_status)) return;
  busy = true; $('generate-images').disabled = true;
  try {
+  const spending = await confirmPaid(api, `/thumbnail-ai/jobs/${job.id}/quote`);
+  if (!spending) return;
   $('concept-progress').textContent = 'Generating three images on the backend…';
-  const result = await api(`/thumbnail-ai/jobs/${job.id}/generate`, post({}));
+  const result = await api(`/thumbnail-ai/jobs/${job.id}/generate`, post(spending));
   if (result.images) { job.generated = result.images; job.generation_status = 'completed'; gallery(); }
   else await poll(job.id);
   $('concept-progress').textContent = 'Three generated images ready. Select, edit, or download.';
- } catch (e) { job.generation_status = 'failed'; error(e); }
+ } catch (e) { error(e); }
  finally { busy = false; await buttons().catch(error); }
 };
 async function resume() {
