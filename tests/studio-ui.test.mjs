@@ -29,3 +29,12 @@ test('production transcript workflow has no stale credential-free fixture contro
   assert.match(html,/existing account access/);
   assert.match(html,/id="file"/);assert.match(html,/id="create"/);
 });
+
+test('AI Video Generator adds both modes while sharing the existing editor frame',()=>{
+ const html=read('public/studios/editor-panel.html'),workspace=read('src/StudioWorkspace.jsx'),nav=read('src/StudioNav.jsx'),script=read('public/studios/editor.js');
+ for(const label of ['AI Video Generator','Text-to-Video','Image-to-Video','Send to Video Editor'])assert.ok(html.includes(label));
+ assert.match(nav,/\/workspace\/generator/);assert.match(workspace,/key==='generator'\?'editor':key/);
+ assert.match(script,/confirmPaid\(api,'\/video-generator\/quote'/);
+ assert.match(script,/post\(\{\.\.\.body,\.\.\.spending\}\)/);
+ assert.match(script,/credits_per_second/);
+});

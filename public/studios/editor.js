@@ -1,7 +1,7 @@
-import {requestJson} from './request-json.js?v=account-20261026-5';
-import {confirmPaid} from './paid-confirm.js?v=account-20261026-5';
+import {requestJson} from './request-json.js?v=generator-20261026-2';
+import {confirmPaid} from './paid-confirm.js?v=generator-20261026-2';
 const $=id=>document.getElementById(id);
-const response=await fetch('/studios/editor-panel.html');
+const response=await fetch('/studios/editor-panel.html?v=generator-20261026-2');
 const host=document.createElement('div');host.innerHTML=await response.text();
 document.querySelector('main').insertBefore(host,document.querySelector('main section:nth-of-type(2)'));
 const style=document.createElement('style');style.textContent='#video-editor .row{align-items:flex-end}#video-editor label{margin:3px 8px 3px 0}#video-editor input[type=number]{width:86px}#video-editor textarea{min-width:200px}#video-editor .row strong{max-width:250px;overflow-wrap:anywhere}#video-editor h3{margin-top:24px}#video-editor input[type=checkbox]{width:auto}#image-video-panel label:has(textarea){display:block;width:100%}#image-video-panel textarea{display:block;width:100%}#video-editor label,#image-video-panel label{max-width:100%}#video-editor input,#video-editor select,#image-video-panel input{max-width:100%}#editor-library{width:100%;max-width:650px}#editor-progress{accent-color:#235840}#image-video-panel img[hidden]{display:none!important}';document.head.append(style);
@@ -42,9 +42,25 @@ function restore(data){library=data.library;const t=data.timeline;segments=t.seg
 $('editor-load').onclick=()=>{try{const value=localStorage.getItem('clipforge-local-timeline');if(!value)throw Error('No saved timeline');restore(JSON.parse(value))}catch(e){fail(e)}};
 async function incoming(){const item=sessionStorage.getItem('clipforge-editor-import');if(!item)return;sessionStorage.removeItem('clipforge-editor-import');try{const a=await api('/editor/import',post(JSON.parse(item)));addAsset(a);append(a);$('editor-import-status').textContent='Video received from ClipForge and appended to the timeline.';$('video-editor').scrollIntoView({behavior:'smooth'})}catch(e){fail(e)}}
 window.addEventListener('message',e=>{if(e.origin===location.origin&&e.data?.type==='editor-import-ready')incoming()});
-async function ivCapabilities(){const c=await api('/image-video/capabilities');$('iv-capability').textContent=c.reason||`Connected provider: ${c.name}`;if(c.durations?.length){const input=$('iv-duration');input.min=Math.min(...c.durations);input.max=Math.max(...c.durations);if(!c.durations.includes(Number(input.value)))input.value=c.durations[0]}$('iv-generate').disabled=!c.available||!ivImage;return c}
-$('iv-image').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;const f=new FormData();f.append('file',file);ivImage=await api('/editor/assets',{method:'POST',body:f});if(ivImage.kind!=='image')throw Error('Choose a still PNG, JPEG or WebP image');$('iv-reference').src='/editor/assets/'+ivImage.id;$('iv-reference').hidden=false;$('iv-error').textContent='';await ivCapabilities()}catch(e){ivImage=null;$('iv-generate').disabled=true;$('iv-reference').hidden=true;$('iv-error').textContent=e.message}};
-$('iv-generate').onclick=async()=>{if(!ivImage)return;$('iv-generate').disabled=true;try{const body={image_id:ivImage.id,prompt:$('iv-prompt').value,duration:Number($('iv-duration').value),ratio:$('iv-ratio').value,motion:$('iv-motion').value};const spending=await confirmPaid(api,'/image-video/quote',body);if(!spending)return;const j=await api('/image-video/jobs',post({...body,...spending}));let result;do{await new Promise(r=>setTimeout(r,1000));result=await api('/image-video/jobs/'+j.id);$('iv-status').textContent=result.stage}while(['queued','running'].includes(result.status));if(result.status==='failed')throw Error(result.error);ivGenerated=result.asset;$('iv-preview').src=result.url;$('iv-download').href=result.url+'?download=1';$('iv-result').hidden=false}catch(e){$('iv-error').textContent=e.message}finally{await ivCapabilities()}};
-$('iv-send').onclick=()=>{if(ivGenerated){addAsset(ivGenerated);append(ivGenerated);$('video-editor').scrollIntoView({behavior:'smooth'})}};
+let ivMode='text',ivCaps=null;
+function ivControls(){
+ const model=ivCaps?.models?.find(m=>m.id===$('iv-model').value);
+ $('iv-image-fields').hidden=ivMode!=='image';$('iv-motion-field').hidden=ivMode!=='image';
+ for(const mode of ['text','image'])$('iv-tab-'+mode).setAttribute('aria-selected',String(ivMode===mode));
+ $('iv-generate').disabled=!ivCaps?.available||!model||(ivMode==='image'&&!ivImage);
+ if(model){const current=Number($('iv-duration').value);$('iv-duration').replaceChildren(...[5,10,...model.durations.filter(n=>![5,10].includes(n))].filter(n=>model.durations.includes(n)).map(n=>{const o=document.createElement('option');o.value=n;o.textContent=n+' seconds';return o}));$('iv-duration').value=model.durations.includes(current)?current:5;$('iv-prompt').maxLength=model.prompt_limit;$('iv-cost').textContent=`Estimated cost: ${model.credits_per_second*Number($('iv-duration').value)} credits. 720p. Review the current balance and spending allowance before confirming.`;}
+}
+function ivModels(){
+ const current=$('iv-model').value;const models=(ivCaps?.models||[]).filter(m=>m.mode===ivMode);
+ $('iv-model').replaceChildren(...models.map(m=>{const o=document.createElement('option');o.value=m.id;o.textContent=m.name;return o}));
+ if(models.some(m=>m.id===current))$('iv-model').value=current;ivControls();
+}
+async function ivCapabilities(){ivCaps=await api('/video-generator/capabilities');$('iv-capability').textContent=ivCaps.reason||'Provider connected';ivModels();return ivCaps}
+for(const mode of ['text','image'])$('iv-tab-'+mode).onclick=()=>{ivMode=mode;ivModels()};
+$('iv-model').onchange=ivControls;$('iv-duration').onchange=ivControls;
+$('iv-image').onchange=async e=>{try{const file=e.target.files[0];if(!file)return;const f=new FormData();f.append('file',file);ivImage=await api('/editor/assets',{method:'POST',body:f});if(ivImage.kind!=='image')throw Error('Choose a PNG, JPEG or WebP image');$('iv-reference').src='/editor/assets/'+ivImage.id;$('iv-reference').hidden=false;$('iv-error').textContent='';ivControls()}catch(e){ivImage=null;ivControls();$('iv-error').textContent=e.message}};
+$('iv-generate').onclick=async()=>{if(ivMode==='image'&&!ivImage)return;$('iv-generate').disabled=true;$('iv-error').textContent='';try{const body={mode:ivMode,model:$('iv-model').value,image_id:ivMode==='image'?ivImage.id:null,prompt:$('iv-prompt').value,duration:Number($('iv-duration').value),ratio:$('iv-ratio').value,motion:ivMode==='text'?'Custom prompt':$('iv-motion').value};const spending=await confirmPaid(api,'/video-generator/quote',body);if(!spending)return;const j=await api('/video-generator/jobs',post({...body,...spending}));let result;do{await new Promise(r=>setTimeout(r,1500));result=await api('/video-generator/jobs/'+j.id);$('iv-status').textContent=result.stage}while(['queued','running'].includes(result.status));if(result.status==='failed')throw Error(result.error);ivGenerated=result.asset;$('iv-preview').src=result.url;$('iv-download').href=result.url+'?download=1';$('iv-result').hidden=false}catch(e){$('iv-error').textContent=e.message}finally{await ivCapabilities()}};
+$('iv-send').onclick=()=>{if(ivGenerated){addAsset(ivGenerated);append(ivGenerated);window.top.postMessage({type:'clipforge-navigate',section:'editor'},location.origin);$('video-editor').scrollIntoView({behavior:'smooth'})}};
+window.addEventListener('message',e=>{if(e.origin===location.origin&&e.source===parent&&e.data?.type==='clipforge-focus-generator')$('image-video-panel').scrollIntoView({block:'start'})});
 window.clipforgeEditor={getTimeline:timeline,getLibrary:()=>structuredClone(library),addAsset,append,restore,render,importPending:incoming};
 paint();ivCapabilities().catch(e=>$('iv-error').textContent=e.message);incoming();
