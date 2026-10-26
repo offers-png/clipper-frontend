@@ -21,6 +21,8 @@
   const add=()=>document.querySelectorAll('video:not(.cf-preview-dialog video)').forEach(video=>{
     if(video.dataset.cfPreview)return;video.dataset.cfPreview='ready';
     const button=document.createElement('button');button.type='button';button.className='cf-open-preview';button.textContent='Open preview';
+    const update=()=>{button.hidden=!(video.currentSrc||video.getAttribute('src'));};
+    update();video.addEventListener('loadedmetadata',update);video.addEventListener('emptied',update);
     button.onclick=()=>{if(video.currentSrc||video.src)open(video,button);};video.after(button);
   });
   new MutationObserver(add).observe(document.body,{childList:true,subtree:true});add();
