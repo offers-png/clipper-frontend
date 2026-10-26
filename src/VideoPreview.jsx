@@ -4,8 +4,9 @@ export default function VideoPreview({src,onClose}) {
   const dialog=useRef(null),video=useRef(null);
   useEffect(()=>{
     const opener=document.activeElement,previous=document.body.style.overflow;
-    dialog.current.showModal();document.body.style.overflow='hidden';
-    return()=>{video.current?.pause();dialog.current?.close();document.body.style.overflow=previous;opener?.focus?.({preventScroll:true});};
+    const modal=dialog.current,media=video.current;
+    modal.showModal();document.body.style.overflow='hidden';
+    return()=>{media.pause();modal.close();document.body.style.overflow=previous;opener?.focus?.({preventScroll:true});};
   },[]);
   return <dialog ref={dialog} className="cf-preview-dialog" aria-labelledby="cf-preview-title"
     onCancel={event=>{event.preventDefault();onClose();}}
