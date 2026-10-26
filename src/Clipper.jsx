@@ -2,8 +2,9 @@
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "./supabaseClient";
 import logo from "./assets/react.svg";
-import {sessionHeaders, verifyBilling, verifiedPaid} from "./billingClient.mjs";
+import {sessionHeaders, verifyBilling, verifiedPaid, billingAction, ownerDevelopment} from "./billingClient.mjs";
 import ClipCard from "./components/ClipCard.jsx";
+import VideoPreview from './VideoPreview.jsx';
 
 const API_BASE = import.meta.env.VITE_API_BASE || "https://clipper-api-final-1.onrender.com";
 const VIDEO_DURATION = 300; // visual ruler only
@@ -41,38 +42,49 @@ export default function Clipper() {
   const [billingMessage, setBillingMessage] = useState('');
   const [billingChecking, setBillingChecking] = useState(false);
   const billingRequest = useRef(0);
+  const billingFlight = useRef(null);
 
-  async function refreshBilling() {
+  function refreshBilling() {
+    if (billingFlight.current) return billingFlight.current;
     const generation = ++billingRequest.current;
     setBillingChecking(true);
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const result = await verifyBilling(supabase.auth, API_BASE, params.get('session_id'));
-      if (generation !== billingRequest.current) return;
-      setBilling(result);
-      setBillingMessage(result.plan === 'payment_pending'
-        ? 'Your subscription has a pending payment or needs attention. Do not start another subscription.' : '');
-      if (verifiedPaid(result)) {
-        setShowUpgradeModal(false);
-        if (params.has('session_id') || params.has('upgrade')) {
-          params.delete('session_id'); params.delete('upgrade');
-          history.replaceState({}, '', location.pathname + (params.size ? '?' + params.toString() : '') + location.hash);
+    const operation = (async () => {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const result = await verifyBilling(supabase.auth, API_BASE, params.get('session_id'));
+        if (generation !== billingRequest.current) return;
+        setBilling(result);
+        setBillingMessage(result.plan === 'payment_pending'
+          ? 'Your subscription has a pending payment or needs attention. Do not start another subscription.' : '');
+        if (verifiedPaid(result) || ownerDevelopment(result)) {
+          setShowUpgradeModal(false);
+          if (params.has('session_id') || params.has('upgrade')) {
+            params.delete('session_id'); params.delete('upgrade');
+            history.replaceState({}, '', location.pathname + (params.size ? '?' + params.toString() : '') + location.hash);
+          }
+        }
+      } catch (error) {
+        if (generation === billingRequest.current) {
+          setBilling(null); setBillingMessage(error.message); setShowUpgradeModal(false);
+        }
+      } finally {
+        if (generation === billingRequest.current) {
+          setBillingChecking(false); billingFlight.current = null;
         }
       }
-    } catch (error) {
-      if (generation === billingRequest.current) {
-        setBilling(null); setBillingMessage(error.message); setShowUpgradeModal(false);
-      }
-    } finally { if (generation === billingRequest.current) setBillingChecking(false); }
+    })();
+    billingFlight.current = operation;
+    return operation;
   }
 
   useEffect(() => {
     refreshBilling();
-    const onFocus = () => refreshBilling();
+    let disposed = false;
+    const onFocus = () => { if (!disposed) refreshBilling(); };
     window.addEventListener('focus', onFocus);
     // Run outside the auth callback to avoid locking the Supabase auth client.
     const {data} = supabase.auth.onAuthStateChange(() => setTimeout(onFocus, 0));
-    return () => { billingRequest.current++; window.removeEventListener('focus', onFocus); data.subscription?.unsubscribe(); };
+    return () => { disposed = true; billingRequest.current++; billingFlight.current = null; window.removeEventListener('focus', onFocus); data.subscription?.unsubscribe(); };
   }, []);
 
   const [clips, setClips] = useState([{ start: "00:00:00", end: "00:00:30", summary: "" }]);
@@ -107,7 +119,7 @@ export default function Clipper() {
     try {
       setUpgrading(true);
       const current = await verifyBilling(supabase.auth, API_BASE);
-      if (verifiedPaid(current)) {
+      if (verifiedPaid(current) || ownerDevelopment(current)) {
         setBilling(current); setShowUpgradeModal(false); return;
       }
       const headers = await sessionHeaders(supabase.auth);
@@ -416,26 +428,26 @@ function tplHashtags() {
   function TemplateBar() {
     return (
       <div className="flex flex-wrap gap-2">
-        <button onClick={tplBestMoments} disabled={aiBusy} className="px-3 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50">🎬 Best 3 Moments</button>
-        <button onClick={tplTitles} disabled={aiBusy} className="px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50">✍️ Viral Titles</button>
-        <button onClick={tplHooks} disabled={aiBusy} className="px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50">💬 Hooks</button>
-        <button onClick={tplHashtags} disabled={aiBusy} className="px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50">#️⃣ Hashtags</button>
-        <button onClick={tplSummarize} disabled={aiBusy} className="px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50">📝 Summary</button>
+        <button onClick={tplBestMoments} disabled={aiBusy} className="px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-700 disabled:opacity-50">🎬 Best 3 Moments</button>
+        <button onClick={tplTitles} disabled={aiBusy} className="px-3 py-1.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 disabled:opacity-50">✍️ Viral Titles</button>
+        <button onClick={tplHooks} disabled={aiBusy} className="px-3 py-1.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 disabled:opacity-50">💬 Hooks</button>
+        <button onClick={tplHashtags} disabled={aiBusy} className="px-3 py-1.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 disabled:opacity-50">#️⃣ Hashtags</button>
+        <button onClick={tplSummarize} disabled={aiBusy} className="px-3 py-1.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 disabled:opacity-50">📝 Summary</button>
       </div>
     );
   }
 
   // ---------- UI ----------
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-indigo-50 to-slate-200 text-slate-800">
+    <div className="min-h-screen bg-[#F8FAFC] text-[#172033]">
       {/* Header */}
       <div className="border-b border-slate-200 bg-white/80 backdrop-blur-sm sticky top-0 z-30 shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex flex-wrap gap-3 items-center justify-between">
           <div className="flex items-center gap-3">
             <img src={logo} alt="ClipForge AI" className="h-8 w-8" />
             <div className="text-lg font-semibold tracking-wide text-slate-800">ClipForge AI</div>
           </div>
-          <div className="flex items-center gap-3 text-sm">
+          <div className="flex flex-wrap items-center gap-3 text-sm">
             <label className="flex items-center gap-2 text-slate-600">
               <input type="checkbox" checked={watermarkOn} onChange={e=>setWatermarkOn(e.target.checked)} />
               Watermark
@@ -461,13 +473,17 @@ function tplHashtags() {
             >
               📋 History
             </a>
-            <button
-              onClick={() => { setUpgradeMsg("Unlock unlimited clips for $9.99/month."); setShowUpgradeModal(true); }}
+            {['owner', 'paid', 'trial'].includes(billingAction(billing)) ? <span role="status" className="bg-emerald-100 px-3 py-1 rounded text-emerald-800 font-medium">{billingAction(billing) === 'owner' ? 'Owner development: Unlimited' : billingAction(billing) === 'paid' ? 'Pro active' : 'Trial active'}</span> : <button
+              disabled={billingChecking}
+              onClick={() => {
+                if (billingAction(billing) === 'verify') { refreshBilling(); return; }
+                setUpgradeMsg("Unlock unlimited clips for $9.99/month."); setShowUpgradeModal(true);
+              }}
               className="bg-emerald-500 hover:bg-emerald-600 px-3 py-1 rounded text-white font-medium"
             >
-              ⚡ Upgrade
-            </button>
-            <button onClick={handleLogout} className="bg-indigo-600 hover:bg-indigo-700 px-3 py-1 rounded text-slate-800">
+              {billingChecking ? 'Verifying plan…' : billingAction(billing) === 'verify' ? 'Verify subscription' : '⚡ Upgrade'}
+            </button>}
+            <button onClick={handleLogout} className="bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded text-slate-800">
               Logout
             </button>
           </div>
@@ -522,7 +538,7 @@ function tplHashtags() {
               <button
                 onClick={handleTranscribe}
                 disabled={isBusy}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg py-2 disabled:opacity-60"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 disabled:opacity-60"
               >{isBusy ? "Processing..." : "Upload & Transcribe"}</button>
 
               {!!transcript && (
@@ -637,7 +653,7 @@ function tplHashtags() {
               <button
                 onClick={handleClipAll}
                 disabled={isBusy || clips.length===0}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg py-2 disabled:opacity-60"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg py-2 disabled:opacity-60"
               >{isBusy ? "Clipping..." : "Clip All"}</button>
 
               {!!clipMsg && <p className="text-emerald-600 text-sm mt-3">{clipMsg}</p>}
@@ -688,11 +704,11 @@ function tplHashtags() {
 
             <div className="p-3 border-b border-slate-200">
               <div className="flex flex-wrap gap-2">
-                <button onClick={tplBestMoments} disabled={aiBusy} className="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-sm">🎬 Moments</button>
-                <button onClick={tplTitles}      disabled={aiBusy} className="px-2.5 py-1 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-sm">✍️ Titles</button>
-                <button onClick={tplHooks}       disabled={aiBusy} className="px-2.5 py-1 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-sm">💬 Hooks</button>
-                <button onClick={tplHashtags}    disabled={aiBusy} className="px-2.5 py-1 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-sm">#️⃣ Hashtags</button>
-                <button onClick={tplSummarize}   disabled={aiBusy} className="px-2.5 py-1 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-sm">📝 Summary</button>
+                <button onClick={tplBestMoments} disabled={aiBusy} className="px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-sm">🎬 Moments</button>
+                <button onClick={tplTitles}      disabled={aiBusy} className="px-2.5 py-1 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 disabled:opacity-50 text-sm">✍️ Titles</button>
+                <button onClick={tplHooks}       disabled={aiBusy} className="px-2.5 py-1 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 disabled:opacity-50 text-sm">💬 Hooks</button>
+                <button onClick={tplHashtags}    disabled={aiBusy} className="px-2.5 py-1 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 disabled:opacity-50 text-sm">#️⃣ Hashtags</button>
+                <button onClick={tplSummarize}   disabled={aiBusy} className="px-2.5 py-1 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 disabled:opacity-50 text-sm">📝 Summary</button>
               </div>
             </div>
 
@@ -723,7 +739,7 @@ function tplHashtags() {
                 <button
                   onClick={() => { if (aiInput.trim()) { askAI(aiInput.trim()); setAiInput(""); } }}
                   disabled={aiBusy}
-                  className="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 h-[42px] self-end"
+                  className="px-4 py-2 rounded bg-blue-600 hover:bg-blue-700 disabled:opacity-50 h-[42px] self-end"
                 >
                   {aiBusy ? 'Thinking…' : 'Ask AI'}
                 </button>
@@ -786,7 +802,7 @@ function tplHashtags() {
             <button
               onClick={handleUpgrade}
               disabled={upgrading}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-semibold py-3 rounded-xl mb-3 transition-colors"
+              className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold py-3 rounded-xl mb-3 transition-colors"
             >
               {upgrading ? "Redirecting to checkout..." : "Start Free Trial →"}
             </button>
@@ -800,29 +816,7 @@ function tplHashtags() {
         </div>
       )}
 
-      {/* Modal Preview (same page) */}
-      {previewOpen && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 w-[90vw] max-w-3xl">
-            <div className="flex items-center justify-between mb-3">
-              <div className="font-semibold">Preview</div>
-              <button
-                onClick={()=>{ setPreviewOpen(false); setPreviewSrc(""); }}
-                className="px-2 py-1 text-sm rounded bg-slate-100 hover:bg-slate-200"
-              >
-                Close
-              </button>
-            </div>
-            <video
-              key={previewSrc}
-              src={previewSrc}
-              controls
-              playsInline
-              className="w-full rounded"
-            />
-          </div>
-        </div>
-      )}
+      {previewOpen && <VideoPreview src={previewSrc} onClose={()=>{setPreviewOpen(false);setPreviewSrc('');}}/>}
     </div>
   );
 }
