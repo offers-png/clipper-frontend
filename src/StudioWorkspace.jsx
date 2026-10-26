@@ -43,6 +43,6 @@ export default function StudioWorkspace({accessToken=null}){
     <StudioNav active={active} navigate={navigate}/>
     {backend==='missing'&&<p role="alert" className="studio-api-notice">Studio processing is not enabled on this server yet. Manual thumbnail editing remains available; uploads and rendering need the Studio backend.</p>}
     {backend==='unavailable'&&<p role="alert" className="studio-api-notice">The Studio backend could not be reached. Your original ClipForge tools are still available.</p>}
-    <main>{[...visited].map(key=><iframe key={key} hidden={active!==key} ref={el=>refs.current[key]=el} title={key==='editor'?'Video Editing Workspace':key+' Studio'} src={`/studios/${views[key]}?api=${encodeURIComponent(api)}&v=account-20261026-3`} onLoad={()=>{authenticateFrame(refs.current[key]);refs.current[key]?.contentWindow.postMessage({type:'editor-import-ready'},location.origin)}}/>)}</main>
+    <main>{[...visited].map(key=><iframe key={key} hidden={active!==key} ref={el=>refs.current[key]=el} title={key==='editor'?'Video Editing Workspace':key+' Studio'} src={`/studios/${views[key]}?api=${encodeURIComponent(api)}&v=account-20261026-4`} onLoad={()=>{authenticateFrame(refs.current[key]);refs.current[key]?.contentWindow.postMessage({type:'editor-import-ready'},location.origin)}}/>)}</main>
   </div>;
 }

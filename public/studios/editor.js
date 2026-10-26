@@ -1,4 +1,4 @@
-import {confirmPaid} from './paid-confirm.js?v=account-20261026-3';
+import {confirmPaid} from './paid-confirm.js?v=account-20261026-4';
 const $=id=>document.getElementById(id);
 const response=await fetch('/studios/editor-panel.html');
 const host=document.createElement('div');host.innerHTML=await response.text();

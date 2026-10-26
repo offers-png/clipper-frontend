@@ -1,4 +1,4 @@
-import {confirmPaid} from './paid-confirm.js?v=account-20261026-3';
+import {confirmPaid} from './paid-confirm.js?v=account-20261026-4';
 const $ = id => document.getElementById(id);
 let job = null, busy = false;
 async function api(url, options) {

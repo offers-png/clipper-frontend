@@ -12,7 +12,7 @@ test('thumbnail document and module have matching deployment cache versions',()=
 test('every independently loaded Studio document receives the same theme and preview controls',()=>{
   for(const name of ['studio.html','transcript.html','thumbnails.html','legacy.html']){
     const html=read('public/studios/'+name);
-    assert.match(html,/href="\/studios\/light-theme.css"/,name);
+    assert.match(html,/href="\/studios\/light-theme.css(?:\?v=[\w-]+)?"/,name);
     assert.match(html,/src="\/studios\/preview-modal.js"/,name);
   }
 });
