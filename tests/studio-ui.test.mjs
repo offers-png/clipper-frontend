@@ -36,5 +36,6 @@ test('AI Video Generator adds both modes while sharing the existing editor frame
  assert.match(nav,/\/workspace\/generator/);assert.match(workspace,/key==='generator'\?'editor':key/);
  assert.match(script,/confirmPaid\(api,'\/video-generator\/quote'/);
  assert.match(script,/post\(\{\.\.\.body,\.\.\.spending\}\)/);
- assert.match(script,/credits_per_second/);
+ assert.match(script,/selectedPrice/);
+ for(const id of ['iv-resolution','iv-audio','iv-allowance','iv-pricing-source'])assert.ok(html.includes(id));
 });
