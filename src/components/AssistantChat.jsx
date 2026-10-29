@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { supabase } from "../supabaseClient";
 import { sessionHeaders } from "../billingClient.mjs";
+import { askAiReply } from "../askAi.mjs";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -28,7 +29,7 @@ export default function AssistantChat({ transcript }) {
 
       const data = await res.json();
 
-      const botMsg = { sender: "assistant", text: data.reply };
+      const botMsg = { sender: "assistant", text: askAiReply(res.ok, data) };
       setMessages((prev) => [...prev, botMsg]);
 
     } catch (err) {
