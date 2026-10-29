@@ -5,13 +5,14 @@ import AuthForm from "./AuthForm";
 import Clipper from "./Clipper";
 import Dashboard from "./Dashboard";
 import ProtectedRoute from "./ProtectedRoute";
+import { devBypassActive } from "./devBypass.mjs";
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
         {/* Login / Signup page */}
-        <Route path="/" element={<AuthForm />} />
+        <Route path="/" element={devBypassActive() ? <Navigate to="/clipper" replace /> : <AuthForm />} />
 
         {/* Main app (requires auth) */}
         <Route
