@@ -1,5 +1,6 @@
 import {requestJson} from './request-json.js?v=pricing-20261026-1';
 import {confirmPaid} from './paid-confirm.js?v=pricing-20261026-1';
+import {makeZip, fileSlug} from './zip-store.js?v=thumbs-20261029-1';
 const $ = id => document.getElementById(id);
 let job = null, busy = false;
 const api=requestJson;
@@ -53,7 +54,24 @@ async function capabilities() {
  $('analyze-video').disabled = busy || !c.text_analysis.ready || (c.transcription && !c.transcription.ready);
  return c;
 }
+async function downloadAll() {
+ const concepts = job?.analysis?.concepts || [];
+ if (!concepts.length) throw Error('Analyze a video first');
+ $('download-all').disabled = true; $('concept-progress').textContent = 'Preparing all thumbnails…';
+ try {
+  const files = [];
+  for (const [i, c] of concepts.entries()) {
+   const url = job.generated?.find(item => item.id === c.id)?.url || c.reference.url;
+   const blob = await window.thumbnailStudio.renderConcept(c, url);
+   files.push({name: `thumbnail-${i + 1}-${fileSlug(c.title)}.png`, bytes: new Uint8Array(await blob.arrayBuffer())});
+  }
+  download(new Blob([makeZip(files)], {type: 'application/zip'}), 'clipforge-thumbnails.zip');
+  $('concept-progress').textContent = `Downloaded ${files.length} thumbnails in clipforge-thumbnails.zip.`;
+ } finally { $('download-all').disabled = !concepts.length; }
+}
+$('download-all').onclick = () => downloadAll().catch(error);
 async function buttons() {
+ $('download-all').disabled = busy || !job?.analysis?.concepts?.length;
  const c = await capabilities();
  $('generate-images').disabled = busy || !job || !c.image_generation.available || ['queued','running','failed','completed'].includes(job?.generation_status);
 }
@@ -76,7 +94,7 @@ async function poll(id) {
 $('analyze-video').onclick = async () => {
  if (busy) return;
  const file = $('concept-video').files[0]; if (!file) return error(Error('Choose a video first'));
- busy = true; $('analyze-video').disabled = true; $('generate-images').disabled = true;
+ busy = true; $('analyze-video').disabled = true; $('generate-images').disabled = true; $('download-all').disabled = true;
  $('concept-error').textContent = ''; $('concept-gallery').replaceChildren(); job = null;
  try {
   $('concept-progress').textContent = 'Uploading video to your workspace…';
