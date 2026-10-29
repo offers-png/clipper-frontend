@@ -149,11 +149,7 @@ export default function Clipper() {
 
     const fd = new FormData();
     
-    // ✅ Get user info from Supabase
-    const { data: { user } } = await supabase.auth.getUser();
-    const userId = user?.email || "@ClippedBySal";
-    
-    fd.append("user_id", userId);
+    // The backend saves history under the signed-in account from the session token.
 
     // ✅ If we already generated clips, transcribe the FIRST preview clip
     if (generated.length > 0 && generated[0].preview_url) {
@@ -174,11 +170,12 @@ export default function Clipper() {
 
     const res = await fetch(`${API_BASE}/transcribe`, {
       method: "POST",
+      headers: await sessionHeaders(supabase.auth),
       body: fd
     });
 
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || "Transcription failed");
+    if (!res.ok || !data.ok) throw new Error(data.error || data.detail || "Transcription failed");
 
     setTranscript(data.text || "(no text)");
     
@@ -299,11 +296,12 @@ async function transcribeClipByUrl(clipUrl) {
 
     const res = await fetch(`${API_BASE}/transcribe_clip`, {  // <-- NEW ENDPOINT
       method: "POST",
+      headers: await sessionHeaders(supabase.auth),
       body: fd,
     });
 
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || "Clip transcription failed");
+    if (!res.ok || !data.ok) throw new Error(data.error || data.detail || "Clip transcription failed");
 
     setClipMsg("📝 Clip transcript ready (see Transcript panel)");
     setTranscript(data.text || "(no text)");
@@ -327,6 +325,7 @@ async function transcribeClipByUrl(clipUrl) {
 
     const res = await fetch(`${API_BASE}/history/update`, {
       method: "POST",
+      headers: await sessionHeaders(supabase.auth),
       body: fd
     });
 
@@ -350,11 +349,12 @@ async function transcribeClipByUrl(clipUrl) {
 
     const res = await fetch(`${API_BASE}/ai_chat`, {
       method: "POST",
+      headers: await sessionHeaders(supabase.auth),
       body: fd
     });
 
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || "AI helper failed");
+    if (!res.ok || !data.ok) throw new Error(data.error || data.detail || "AI helper failed");
 
     const aiReply = data.reply || "(no reply)";
 

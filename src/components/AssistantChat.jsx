@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { supabase } from "../supabaseClient";
+import { sessionHeaders } from "../billingClient.mjs";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -17,7 +19,7 @@ export default function AssistantChat({ transcript }) {
     try {
       const res = await fetch(`${API_URL}/ask-ai`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await sessionHeaders(supabase.auth)) },
         body: JSON.stringify({
           prompt: input,
           transcript: transcript || "", // IMPORTANT
