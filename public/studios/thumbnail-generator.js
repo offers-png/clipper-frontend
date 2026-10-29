@@ -49,6 +49,7 @@ async function capabilities() {
  if (c.transcription && !c.transcription.ready) messages.push('Speech model or transcription library is missing.');
  if (!c.text_analysis.ready) messages.push('Text-analysis model/runtime is missing.');
  if (!c.semantic_vision) messages.push('Visual subject analysis is unavailable; any concepts use dialogue only.');
+ if (c.headlines?.provider === 'openai') messages.push(`Headlines are written by OpenAI (${c.headlines.model}); ${c.headlines.sends} are sent to OpenAI.`);
  messages.push(c.image_generation.reason || `Image provider: ${c.image_generation.name}`);
  $('generator-capability').textContent = messages.join(' ');
  $('analyze-video').disabled = busy || !c.text_analysis.ready || (c.transcription && !c.transcription.ready);
@@ -77,7 +78,8 @@ async function buttons() {
 }
 function summary() {
  const observations = (job.observations || []).map(o => `${o.time.toFixed(2)}s: ${o.description}`).join(' ');
- $('concept-analysis').textContent = `Main topic (${job.subject_basis || 'dialogue analysis'}): ${job.analysis.topic}. ${job.visual_analysis} Scene changes: ${job.scene_changes.length}. ${observations} ${job.warnings.join(' ')}`;
+ const headlines = job.analysis.headline_engine ? ` Headlines: ${job.analysis.headline_engine}.` : '';
+ $('concept-analysis').textContent = `Main topic (${job.subject_basis || 'dialogue analysis'}): ${job.analysis.topic}.${headlines} ${job.visual_analysis} Scene changes: ${job.scene_changes.length}. ${observations} ${job.warnings.join(' ')}`;
 }
 async function poll(id) {
  do {
