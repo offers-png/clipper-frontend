@@ -431,14 +431,18 @@ function tplHashtags() {
     }
   }
 
+  // The AI actions, shown once: in the assistant, or in the editor while the assistant is hidden.
+  // Answers appear in the assistant, so an action opens it.
   function TemplateBar() {
+    const run = action => () => { setAiOpen(true); action(); };
+    const secondary = "px-3 py-1.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 disabled:opacity-50";
     return (
       <div className="flex flex-wrap gap-2">
-        <button onClick={tplBestMoments} disabled={aiBusy} className="px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-700 disabled:opacity-50">🎬 Best 3 Moments</button>
-        <button onClick={tplTitles} disabled={aiBusy} className="px-3 py-1.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 disabled:opacity-50">✍️ Viral Titles</button>
-        <button onClick={tplHooks} disabled={aiBusy} className="px-3 py-1.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 disabled:opacity-50">💬 Hooks</button>
-        <button onClick={tplHashtags} disabled={aiBusy} className="px-3 py-1.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 disabled:opacity-50">#️⃣ Hashtags</button>
-        <button onClick={tplSummarize} disabled={aiBusy} className="px-3 py-1.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 disabled:opacity-50">📝 Summary</button>
+        <button onClick={run(tplBestMoments)} disabled={aiBusy} className="px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-700 disabled:opacity-50">🎬 Best 3 Moments</button>
+        <button onClick={run(tplTitles)} disabled={aiBusy} className={secondary}>✍️ Viral Titles</button>
+        <button onClick={run(tplHooks)} disabled={aiBusy} className={secondary}>💬 Hooks</button>
+        <button onClick={run(tplHashtags)} disabled={aiBusy} className={secondary}>#️⃣ Hashtags</button>
+        <button onClick={run(tplSummarize)} disabled={aiBusy} className={secondary}>📝 Summary</button>
       </div>
     );
   }
@@ -537,9 +541,11 @@ function tplHashtags() {
                 <p className="text-xs text-slate-400 mt-1">If a URL is provided, the file picker is ignored.</p>
               </div>
 
-              <div className="mb-4">
-                <TemplateBar />
-              </div>
+              {!aiOpen && (
+                <div className="mb-4">
+                  <TemplateBar />
+                </div>
+              )}
 
               <button
                 onClick={handleTranscribe}
@@ -590,9 +596,11 @@ function tplHashtags() {
                 Add up to 5 clip segments. Clip all at once to get previews (no page change).
               </div>
 
-              <div className="mb-4">
-                <TemplateBar />
-              </div>
+              {!aiOpen && (
+                <div className="mb-4">
+                  <TemplateBar />
+                </div>
+              )}
 
               {/* form for creating sections */}
               {clips.map((c, idx)=>(
@@ -709,13 +717,7 @@ function tplHashtags() {
             </div>
 
             <div className="p-3 border-b border-slate-200">
-              <div className="flex flex-wrap gap-2">
-                <button onClick={tplBestMoments} disabled={aiBusy} className="px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-sm">🎬 Moments</button>
-                <button onClick={tplTitles}      disabled={aiBusy} className="px-2.5 py-1 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 disabled:opacity-50 text-sm">✍️ Titles</button>
-                <button onClick={tplHooks}       disabled={aiBusy} className="px-2.5 py-1 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 disabled:opacity-50 text-sm">💬 Hooks</button>
-                <button onClick={tplHashtags}    disabled={aiBusy} className="px-2.5 py-1 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 disabled:opacity-50 text-sm">#️⃣ Hashtags</button>
-                <button onClick={tplSummarize}   disabled={aiBusy} className="px-2.5 py-1 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 disabled:opacity-50 text-sm">📝 Summary</button>
-              </div>
+              <TemplateBar />
             </div>
 
             <div ref={aiListRef} className="flex-1 overflow-auto p-4 space-y-3 max-h-[60vh] md:max-h-none">
