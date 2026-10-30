@@ -85,7 +85,7 @@ async function capabilities() {
  if (c.transcription && !c.transcription.ready) messages.push('Speech model or transcription library is missing.');
  if (!c.text_analysis.ready) messages.push('Text-analysis model/runtime is missing.');
  if (!c.semantic_vision) messages.push('Visual subject analysis is unavailable; any concepts use dialogue only.');
- if (c.headlines?.provider === 'openai') messages.push(`Headlines are written by OpenAI (${c.headlines.model}); ${c.headlines.sends} are sent to OpenAI.`);
+ if (c.headlines?.provider === 'openai') messages.push(`Analysis and titles use OpenAI (${c.headlines.model}); ${c.headlines.sends} are sent to OpenAI.`);
  messages.push(c.image_generation.reason || `Image provider: ${c.image_generation.name}`);
  $('generator-capability').textContent = messages.join(' ');
  designStatus = c.design || null; if (job) designs();

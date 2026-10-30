@@ -8,12 +8,12 @@ body{font:16px/1.6 system-ui;background:#f3f5fb;color:#17233b;margin:0}main{max-
 <main>
 <h1>Text-to-Clip</h1>
 <p><a href="/auto" target="_self" class="button">Open AI Auto Clips</a> — full-video splitting, editing and batch exports.</p>
-<p class="note">Word-aligned transcription uses the server's offline faster-whisper engine. Highlight actual source words and preview the timing before clipping. Uploads and clips use your existing account access.</p>
+<p class="note">The ClipForge server transcribes your video word by word. Highlight any words and preview the timing before clipping. Uploads and clips use your existing account access.</p>
 <section>
 <h2>1. Select a source</h2>
 <label>Video file <input id="file" type="file" accept="video/*"></label>
 <button id="load" disabled>Transcribe actual video</button>
-<p>Your actual audio is transcribed with offline models on the ClipForge server. Model word timestamps are estimates; check the source preview when selecting boundaries. No mock transcript is substituted.</p>
+<p>Word times are estimates from the speech recognition; check the preview before clipping.</p>
 <video id="source" controls preload="metadata" hidden></video>
 </section>
 <section>
@@ -47,7 +47,7 @@ function choose(next){file=next;video=null;selected=null;selectionEnd=null;$('re
 $('file').onchange=e=>{if(e.target.files[0])choose(e.target.files[0])};
 async function prepare(){if(video)return video;if(!file)throw Error('Choose a video');const fd=new FormData();fd.append('file',file);video=await request('/api/videos',{method:'POST',body:fd});renderWords();return video}
 function renderWords(){const fragment=document.createDocumentFragment();video.words.forEach((w,i)=>{if(i===0||(video.segments||[]).some(segment=>segment.first===i)){const time=document.createElement('small');time.className='time';time.textContent=w.start.toFixed(3)+' seconds';fragment.append(time)}const span=document.createElement('span');span.dataset.word=i;span.textContent=w.word;span.title=w.start.toFixed(3)+' - '+w.end.toFixed(3)+' seconds; confidence '+(w.probability*100).toFixed(0)+'%';fragment.append(span,document.createTextNode(' '))});$('transcript').replaceChildren(fragment)}
-$('load').onclick=()=>run('Transcribing actual audio locally; first run may take a minute...',async()=>{await prepare();$('status').textContent='Real speech transcript ready: faster-whisper '+video.model+'. Verify boundaries with the source preview.'});
+$('load').onclick=()=>run('Transcribing your video…',async()=>{await prepare();$('status').textContent='Transcript ready ('+(video.engine==='openai-whisper'?'OpenAI Whisper':'faster-whisper '+video.model)+'). Verify boundaries with the source preview.'});
 function readSelection(){const s=getSelection();if(!s.rangeCount||s.isCollapsed)return;const r=s.getRangeAt(0),root=$('transcript');if(!root.contains(r.startContainer)||!root.contains(r.endContainer))return;const nodes=[...root.querySelectorAll('[data-word]')].filter(node=>{const w=document.createRange();w.selectNodeContents(node);return r.compareBoundaryPoints(Range.END_TO_START,w)<0&&r.compareBoundaryPoints(Range.START_TO_END,w)>0});if(!nodes.length)return;selected={first:Number(nodes[0].dataset.word),last:Number(nodes.at(-1).dataset.word)};root.querySelectorAll('[data-word]').forEach(n=>n.classList.toggle('selected',Number(n.dataset.word)>=selected.first&&Number(n.dataset.word)<=selected.last));showRange();update()}
 $('transcript').onmouseup=readSelection;$('transcript').onkeyup=readSelection;
 function appendClip(c){const article=document.createElement('article'),heading=document.createElement('h3'),player=document.createElement('video'),text=document.createElement('p'),link=document.createElement('a');heading.textContent=c.start.toFixed(2)+' – '+c.end.toFixed(2)+' seconds ('+c.duration_seconds.toFixed(2)+'s)';player.controls=true;player.preload='metadata';player.src=c.preview_url;text.textContent=c.text;link.href=c.download_url;link.textContent='Download clip';link.className='button';link.download='clip.mp4';article.append(heading,player,text,link);$('results').append(article)}
