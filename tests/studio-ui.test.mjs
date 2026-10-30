@@ -64,7 +64,11 @@ test('Video Editing Workspace is visual: live preview, thumbnail timeline, drag 
 test('Thumbnail Creator has AI thumbnails: style gallery with bundled previews, quality prices, cost confirm',()=>{
  const script=read('public/studios/ai-thumbnails.js'),host=read('public/studios/thumbnail-generator.js');
  assert.match(host,/import \{aiThumbnails\} from '\.\/ai-thumbnails\.js/);
- for(const text of ['Generate AI thumbnail','Confirm','/thumbnail-ai/ai-styles','confirmed_total_usd','per image','Edit with title'])assert.ok(script.includes(text),text);
+ for(const text of ['Generate AI thumbnail','Confirm','/thumbnail-ai/ai-styles','confirmed_total_usd','per image','click to use'])assert.ok(script.includes(text),text);
+ // One full-frame image layer + one outlined title layer; swapping replaces the image instead of stacking.
+ assert.match(script,/\{id: 'ai-image', type: 'image', asset: key, x: 0, y: 0, w: W, h: H, fit: 'cover'/);
+ assert.match(script,/strokeWidth:16/);assert.match(script,/item\.title_side/);
+ assert.doesNotMatch(script,/addImage|renderConcept/);
  assert.match(script,/× \$\{money\(price\(\)\)\} = \$\{money\(total\(\)\)\}/);  // "3 styles × $0.04 = $0.12"
  for(const slug of ['anime','80s-flashback','comic','collectors-tin','hyperreal-wallpaper'])assert.ok(existsSync(new URL(`../public/studios/thumbnail-styles/${slug}.jpg`,import.meta.url)),slug);
 });

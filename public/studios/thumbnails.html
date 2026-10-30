@@ -66,4 +66,4 @@ const key=id(),image=await createImageBitmap(await response.blob()),p=conceptPro
 const c=document.createElement('canvas');c.width=p.width;c.height=p.height;draw(c.getContext('2d'),false,p,new Map([[key,{image}]]));
 return new Promise((resolve,reject)=>c.toBlob(b=>b?resolve(b):reject(Error('Could not render thumbnail')),type,.92))}
 window.thumbnailStudio={getProject:exportState,restore,exportImage,addImage,loadConcept,renderConcept};paint();library().catch(fail);
-</script><script type="module" src="/studios/thumbnail-generator.js?v=ai-20261031-1"></script></body></html>
+</script><script type="module" src="/studios/thumbnail-generator.js?v=ai-20261031-2"></script></body></html>

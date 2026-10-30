@@ -1,7 +1,7 @@
 import {requestJson} from './request-json.js?v=pricing-20261026-1';
 import {confirmPaid} from './paid-confirm.js?v=pricing-20261026-1';
 import {makeZip, fileSlug} from './zip-store.js?v=thumbs-20261029-1';
-import {aiThumbnails} from './ai-thumbnails.js?v=ai-20261031-1';
+import {aiThumbnails} from './ai-thumbnails.js?v=ai-20261031-2';
 const $ = id => document.getElementById(id);
 let job = null, busy = false;
 const api=requestJson;
