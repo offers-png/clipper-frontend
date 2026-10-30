@@ -48,3 +48,15 @@ test('AI Video Generator adds both modes while sharing the existing editor frame
  assert.match(script,/selectedPrice/);
  for(const id of ['iv-resolution','iv-audio','iv-allowance','iv-pricing-source'])assert.ok(html.includes(id));
 });
+
+test('Video Editing Workspace is visual: live preview, thumbnail timeline, drag editing, settings panel',()=>{
+ const html=read('public/studios/editor-panel.html'),script=read('public/studios/timeline-editor.js'),host=read('public/studios/editor.js');
+ for(const id of ['ve-stage','ve-text-layer','ve-overlay-layer','ve-play','ve-split','ve-timeline','ve-inspector','ve-bin','editor-render','editor-upload','editor-link'])assert.ok(html.includes(`id="${id}"`),id);
+ assert.ok(html.indexOf('id="ve-stage"')<html.indexOf('id="ve-timeline"'));  // player above the timeline
+ for(const row of ['Video','Text','Overlays','Music','Sound FX'])assert.ok(script.includes(`'${row}'`),row);
+ assert.match(script,/\/editor\/assets\/\$\{a\.id\}\/frame\?t=/);  // frame-thumbnail strips
+ for(const fn of ['function split(','function startDrag(','function scrub(','function stageDrag(','function paintInspector('])assert.ok(script.includes(fn),fn);
+ assert.match(script,/Exact numbers/);  // typed numbers stay as an option
+ assert.match(host,/import\('\.\/timeline-editor\.js/);
+ assert.doesNotMatch(host,/function paint\(\)|editor-segments/);  // the old number-only editor is gone
+});
