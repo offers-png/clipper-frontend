@@ -16,11 +16,20 @@ test('every independently loaded Studio document receives the same theme and pre
     assert.match(html,/src="\/studios\/preview-modal.js"/,name);
   }
 });
-test('renamed navigation retains every existing deep link',()=>{
-  const source=read('src/StudioNav.jsx');
-  for(const [label,path] of [['ClipForge Classic','/clipper'],['AI Auto Clips','/workspace/auto'],['Text-to-Clip','/workspace/transcript'],['Thumbnail Creator','/workspace/thumbnails'],['Video Editor','/workspace/editor']]){
+test('navigation shows the five tools; the Video Editor page stays reachable only through AI Video Generator',()=>{
+  const source=read('src/StudioNav.jsx'),workspace=read('src/StudioWorkspace.jsx');
+  for(const [label,path] of [['ClipForge Classic','/clipper'],['AI Auto Clips','/workspace/auto'],['Text-to-Clip','/workspace/transcript'],['Thumbnail Creator','/workspace/thumbnails'],['AI Video Generator','/workspace/generator']]){
     assert.ok(source.includes(label));assert.ok(source.includes(path));
   }
+  assert.doesNotMatch(source,/'Video Editor'|\/workspace\/editor/);
+  assert.match(workspace,/editor:'legacy.html'/);  // the old /workspace/editor link still opens the same page
+});
+
+test('AI Video Generator page has no bulk clip section; its transcript keeps its own video picker',()=>{
+  const html=read('public/studios/legacy.html'),script=read('public/studios/editor.js');
+  assert.doesNotMatch(html,/Upload once|id="generate"|id="gallery"|Clip All|local-original\/manual/);
+  for(const text of ['Transcript & local assistant','Editing history','id="upload"','id="source-link"','/api/videos/url'])assert.ok(html.includes(text),text);
+  assert.match(script,/main section:nth-of-type\(1\)/);  // generator and editing workspace stay above the transcript
 });
 
 test('production transcript workflow has no stale credential-free fixture controls',()=>{

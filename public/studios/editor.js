@@ -4,7 +4,7 @@ import {selectedPrice,usdFromCredits,audioLabel} from './video-pricing.js?v=pric
 const $=id=>document.getElementById(id);
 const response=await fetch('/studios/editor-panel.html?v=links-20261030-1');
 const host=document.createElement('div');host.innerHTML=await response.text();
-document.querySelector('main').insertBefore(host,document.querySelector('main section:nth-of-type(2)'));
+document.querySelector('main').insertBefore(host,document.querySelector('main section:nth-of-type(1)'));
 const style=document.createElement('style');style.textContent='#video-editor .row{align-items:flex-end}#video-editor label{margin:3px 8px 3px 0}#video-editor input[type=number]{width:86px}#video-editor textarea{min-width:200px}#video-editor .row strong{max-width:250px;overflow-wrap:anywhere}#video-editor h3{margin-top:24px}#video-editor input[type=checkbox]{width:auto}#image-video-panel label:has(textarea){display:block;width:100%}#image-video-panel textarea{display:block;width:100%}#video-editor label,#image-video-panel label{max-width:100%}#video-editor input,#video-editor select,#image-video-panel input{max-width:100%}#editor-library{width:100%;max-width:650px}#editor-progress{accent-color:#235840}#image-video-panel img[hidden]{display:none!important}';document.head.append(style);
 let library=[],segments=[],tracks=[],overlays=[],texts=[],rendering=false,ivImage=null,ivGenerated=null;
 const api=requestJson;
