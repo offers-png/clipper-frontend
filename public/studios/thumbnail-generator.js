@@ -132,13 +132,20 @@ async function poll(id) {
 }
 $('analyze-video').onclick = async () => {
  if (busy) return;
- const file = $('concept-video').files[0]; if (!file) return error(Error('Choose a video first'));
+ const file = $('concept-video').files[0], link = $('concept-link').value.trim();
+ if (!file && !link) return error(Error('Choose a video or paste a link first'));
  busy = true; $('analyze-video').disabled = true; $('generate-images').disabled = true; $('download-all').disabled = true;
  $('concept-error').textContent = ''; $('concept-gallery').replaceChildren(); job = null; designs();
  try {
-  $('concept-progress').textContent = 'Uploading video to your workspace…';
-  const form = new FormData(); form.append('file', file);
-  const source = await api('/studio/sources', {method:'POST', body:form});
+  let source;
+  if (file) {
+   $('concept-progress').textContent = 'Uploading video to your workspace…';
+   const form = new FormData(); form.append('file', file);
+   source = await api('/studio/sources', {method:'POST', body:form});
+  } else {
+   $('concept-progress').textContent = 'Downloading the video from the link…';
+   source = await api('/studio/sources/url', post({link}));
+  }
   const created = await api('/thumbnail-ai/jobs', post({source_id:source.id}));
   sessionStorage.setItem('clipforge-thumbnail-job', created.job_id); await poll(created.job_id);
  } catch (e) { error(e); } finally { busy = false; await buttons().catch(error); }

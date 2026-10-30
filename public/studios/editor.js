@@ -2,7 +2,7 @@ import {requestJson} from './request-json.js?v=pricing-20261026-1';
 import {confirmPaid} from './paid-confirm.js?v=pricing-20261026-1';
 import {selectedPrice,usdFromCredits,audioLabel} from './video-pricing.js?v=pricing-20261026-1';
 const $=id=>document.getElementById(id);
-const response=await fetch('/studios/editor-panel.html?v=pricing-20261026-1');
+const response=await fetch('/studios/editor-panel.html?v=links-20261030-1');
 const host=document.createElement('div');host.innerHTML=await response.text();
 document.querySelector('main').insertBefore(host,document.querySelector('main section:nth-of-type(2)'));
 const style=document.createElement('style');style.textContent='#video-editor .row{align-items:flex-end}#video-editor label{margin:3px 8px 3px 0}#video-editor input[type=number]{width:86px}#video-editor textarea{min-width:200px}#video-editor .row strong{max-width:250px;overflow-wrap:anywhere}#video-editor h3{margin-top:24px}#video-editor input[type=checkbox]{width:auto}#image-video-panel label:has(textarea){display:block;width:100%}#image-video-panel textarea{display:block;width:100%}#video-editor label,#image-video-panel label{max-width:100%}#video-editor input,#video-editor select,#image-video-panel input{max-width:100%}#editor-library{width:100%;max-width:650px}#editor-progress{accent-color:#235840}#image-video-panel img[hidden]{display:none!important}';document.head.append(style);
@@ -26,6 +26,7 @@ function paint(){
  $('editor-status').textContent=`${segments.length} timeline segments, ${Math.max(0,total()).toFixed(2)} seconds. Render to apply edits.`;
 }
 function timeline(){return {segments:structuredClone(segments),tracks:structuredClone(tracks),overlays:structuredClone(overlays),texts:structuredClone(texts),ratio:$('editor-ratio').value,original_volume:Number($('editor-original-volume').value),mute_original:$('editor-mute').checked,fade_in:Number($('editor-fade-in').value),fade_out:Number($('editor-fade-out').value)}}
+$('editor-add-link').onclick=async()=>{const link=$('editor-link').value.trim();if(!link)return;const button=$('editor-add-link');button.disabled=true;try{$('editor-error').textContent='';$('editor-import-status').textContent='Downloading the video from the link…';addAsset(await api('/editor/assets/url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({link})}));$('editor-link').value='';$('editor-import-status').textContent='Video added. Choose it and add it to the timeline.'}catch(e){$('editor-import-status').textContent='';fail(e)}finally{button.disabled=false}};
 $('editor-upload').onchange=async e=>{try{$('editor-error').textContent='';for(const file of e.target.files){const form=new FormData();form.append('file',file);addAsset(await api('/editor/assets',{method:'POST',body:form}))}$('editor-import-status').textContent='Media imported. Choose an asset and add it to the timeline or audio/overlay tracks.'}catch(e){fail(e)}};
 for(const [id,fn] of [
  ['editor-add-video',()=>append(selected())],
