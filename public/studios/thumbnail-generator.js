@@ -44,6 +44,42 @@ function gallery() {
   card.append(heading, img, label, title, rationale, details, evidence, actions); $('concept-gallery').append(card);
  }
 }
+const DESIGN_STYLES = {mrbeast: 'MrBeast', mkbhd: 'MKBHD', mystery: 'Mystery'};
+let designStatus = null;
+// Designed thumbnails: free and made on the server's computer (face pick, cutout, styled text).
+function designs() {
+ let box = $('designed-thumbnails');
+ if (!box) { box = document.createElement('section'); box.id = 'designed-thumbnails'; $('concept-gallery').after(box); }
+ box.replaceChildren();
+ if (!job?.analysis?.concepts?.length) return;
+ const heading = document.createElement('h2'); heading.textContent = 'Designed thumbnails';
+ const note = document.createElement('p');
+ note.textContent = designStatus?.ready ? 'Free and made locally: picks the most expressive face looking at the camera, cuts the person out and adds bold text. The first style takes about a minute; the others take seconds.' : (designStatus?.reason || 'Designed thumbnails are unavailable on this server.');
+ const actions = document.createElement('div'); actions.className = 'actions';
+ for (const [style, name] of Object.entries(DESIGN_STYLES)) {
+  const b = document.createElement('button'); b.textContent = `Make ${name} style`; b.disabled = busy || !designStatus?.ready;
+  b.onclick = () => design(style).catch(error); actions.append(b);
+ }
+ const grid = document.createElement('div'); grid.style = 'display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:16px';
+ for (const [style, d] of Object.entries(job.designs || {})) {
+  const figure = document.createElement('figure'), img = new Image(), caption = document.createElement('figcaption'), save = document.createElement('button');
+  figure.style = 'margin:0'; img.src = `${d.url}?v=${d.version || 0}`; img.alt = `${DESIGN_STYLES[style]} style thumbnail: ${d.title}`; img.style = 'width:100%;aspect-ratio:16/9;display:block;border-radius:8px';
+  caption.textContent = `${DESIGN_STYLES[style]} · ${d.title}`;
+  save.textContent = 'Download'; save.onclick = async () => { const r = await fetch(d.url); if (!r.ok) return error(Error('Download failed')); download(await r.blob(), `thumbnail-${style}.jpg`); };
+  figure.append(img, caption, save); grid.append(figure);
+ }
+ box.append(heading, note, actions, grid);
+}
+async function design(style) {
+ if (!job || busy) return;
+ busy = true; designs(); $('concept-error').textContent = '';
+ $('concept-progress').textContent = job.design_frame ? `Designing the ${DESIGN_STYLES[style]} thumbnail…` : 'Finding the most expressive face in the video, then designing…';
+ try {
+  const result = await api(`/thumbnail-ai/jobs/${job.id}/design`, post({style}));
+  job.design_frame = result.frame; job.designs = {...job.designs, [style]: {...result, version: Date.now()}};
+  $('concept-progress').textContent = `${DESIGN_STYLES[style]} thumbnail ready (frame at ${Math.floor(result.frame.time / 60)}:${String(Math.floor(result.frame.time % 60)).padStart(2, '0')}, ${result.frame.emotion}).`;
+ } finally { busy = false; designs(); }
+}
 async function capabilities() {
  const c = await api('/thumbnail-ai/capabilities'), messages = [];
  if (c.transcription && !c.transcription.ready) messages.push('Speech model or transcription library is missing.');
@@ -52,6 +88,7 @@ async function capabilities() {
  if (c.headlines?.provider === 'openai') messages.push(`Headlines are written by OpenAI (${c.headlines.model}); ${c.headlines.sends} are sent to OpenAI.`);
  messages.push(c.image_generation.reason || `Image provider: ${c.image_generation.name}`);
  $('generator-capability').textContent = messages.join(' ');
+ designStatus = c.design || null; if (job) designs();
  $('analyze-video').disabled = busy || !c.text_analysis.ready || (c.transcription && !c.transcription.ready);
  return c;
 }
@@ -90,14 +127,14 @@ async function poll(id) {
   else break;
  } while (true);
  if (job.status === 'failed') throw Error(job.error);
- summary(); gallery();
+ summary(); gallery(); designs();
  if (job.generation_status === 'failed') throw Error(job.generation_error);
 }
 $('analyze-video').onclick = async () => {
  if (busy) return;
  const file = $('concept-video').files[0]; if (!file) return error(Error('Choose a video first'));
  busy = true; $('analyze-video').disabled = true; $('generate-images').disabled = true; $('download-all').disabled = true;
- $('concept-error').textContent = ''; $('concept-gallery').replaceChildren(); job = null;
+ $('concept-error').textContent = ''; $('concept-gallery').replaceChildren(); job = null; designs();
  try {
   $('concept-progress').textContent = 'Uploading video to your workspace…';
   const form = new FormData(); form.append('file', file);
