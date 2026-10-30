@@ -1,6 +1,7 @@
 import {requestJson} from './request-json.js?v=pricing-20261026-1';
 import {confirmPaid} from './paid-confirm.js?v=pricing-20261026-1';
 import {makeZip, fileSlug} from './zip-store.js?v=thumbs-20261029-1';
+import {aiThumbnails} from './ai-thumbnails.js?v=ai-20261031-1';
 const $ = id => document.getElementById(id);
 let job = null, busy = false;
 const api=requestJson;
@@ -51,6 +52,7 @@ function designs() {
  let box = $('designed-thumbnails');
  if (!box) { box = document.createElement('section'); box.id = 'designed-thumbnails'; $('concept-gallery').after(box); }
  box.replaceChildren();
+ aiThumbnails(job).catch(error);  // AI thumbnails sit below the designed ones
  if (!job?.analysis?.concepts?.length) return;
  const heading = document.createElement('h2'); heading.textContent = 'Designed thumbnails';
  const note = document.createElement('p');
@@ -172,4 +174,5 @@ async function resume() {
  try { await poll(id); } catch (e) { error(e); }
  finally { busy = false; await buttons().catch(error); }
 }
+designs();  // shows the AI style gallery before any video is analyzed
 resume().catch(error);

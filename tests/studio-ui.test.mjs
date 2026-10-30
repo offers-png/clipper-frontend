@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {readFileSync,existsSync} from 'node:fs';
 const read=path=>readFileSync(new URL('../'+path,import.meta.url),'utf8');
 
 test('thumbnail document and module have matching deployment cache versions',()=>{
@@ -59,4 +59,12 @@ test('Video Editing Workspace is visual: live preview, thumbnail timeline, drag 
  assert.match(script,/Exact numbers/);  // typed numbers stay as an option
  assert.match(host,/import\('\.\/timeline-editor\.js/);
  assert.doesNotMatch(host,/function paint\(\)|editor-segments/);  // the old number-only editor is gone
+});
+
+test('Thumbnail Creator has AI thumbnails: style gallery with bundled previews, quality prices, cost confirm',()=>{
+ const script=read('public/studios/ai-thumbnails.js'),host=read('public/studios/thumbnail-generator.js');
+ assert.match(host,/import \{aiThumbnails\} from '\.\/ai-thumbnails\.js/);
+ for(const text of ['Generate AI thumbnail','Confirm','/thumbnail-ai/ai-styles','confirmed_total_usd','per image','Edit with title'])assert.ok(script.includes(text),text);
+ assert.match(script,/× \$\{money\(price\(\)\)\} = \$\{money\(total\(\)\)\}/);  // "3 styles × $0.04 = $0.12"
+ for(const slug of ['anime','80s-flashback','comic','collectors-tin','hyperreal-wallpaper'])assert.ok(existsSync(new URL(`../public/studios/thumbnail-styles/${slug}.jpg`,import.meta.url)),slug);
 });
