@@ -31,6 +31,7 @@ export default function Clipper() {
   const [file, setFile] = useState(null);
   const [url, setUrl] = useState("");
   const [transcript, setTranscript] = useState("");
+  const [segments, setSegments] = useState([]);  // timestamped /transcribe segments for Best 3 Moments
   const [currentRecordId, setCurrentRecordId] = useState(null);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState("");
@@ -178,7 +179,8 @@ export default function Clipper() {
     if (!res.ok || !data.ok) throw new Error(data.error || data.detail || "Transcription failed");
 
     setTranscript(data.text || "(no text)");
-    
+    setSegments(Array.isArray(data.segments) ? data.segments : []);
+
     // ✅ Set record ID directly from response
     if (data.record_id) {
       setCurrentRecordId(data.record_id);
@@ -305,6 +307,7 @@ async function transcribeClipByUrl(clipUrl) {
 
     setClipMsg("📝 Clip transcript ready (see Transcript panel)");
     setTranscript(data.text || "(no text)");
+    setSegments([]);  // clip times are not source times; Best 3 Moments needs the full video
     setMode("transcribe");
   } catch (e) {
     setError(e.message);
@@ -397,14 +400,15 @@ function tplHashtags() {
 }
   async function tplBestMoments() {
     try {
-      if (!transcript) return setError("Transcribe your video first.");
+      if (!segments.length) return setError("Transcribe the full video first.");
       setAiBusy(true);
-      const fd = new FormData();
-      fd.append("transcript", transcript);
-      fd.append("max_clips", "3");
-      const res = await fetch(`${API_BASE}/auto_clip`, { method: "POST", body: fd });
+      const res = await fetch(`${API_BASE}/auto_clip`, {
+        method: "POST",
+        headers: {...await sessionHeaders(supabase.auth), "Content-Type": "application/json"},
+        body: JSON.stringify({segments, max_clips: 3}),
+      });
       const data = await res.json();
-      if (!res.ok || !data.ok) throw new Error(data.error || "Auto-clip failed");
+      if (!res.ok || !data.ok) throw new Error(data.error || data.detail || "Auto-clip failed");
       if (Array.isArray(data.clips) && data.clips.length) {
         setClips(
           data.clips.slice(0, 5).map(c => ({
