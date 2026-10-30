@@ -31,6 +31,7 @@ export default function Clipper() {
   const [file, setFile] = useState(null);
   const [url, setUrl] = useState("");
   const [transcript, setTranscript] = useState("");
+  const [segments, setSegments] = useState([]);  // timestamped /transcribe segments for Best 3 Moments
   const [currentRecordId, setCurrentRecordId] = useState(null);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState("");
@@ -103,8 +104,10 @@ export default function Clipper() {
   const [aiMsgs, setAiMsgs] = useState([]);
   const [aiInput, setAiInput] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
-  const aiBottomRef = useRef(null);
-  useEffect(() => { aiBottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [aiMsgs]);
+  // Scroll only the chat box to the newest message; scrollIntoView also scrolled the page,
+  // which on phones (assistant below the editor) jumped the page down as soon as it opened.
+  const aiListRef = useRef(null);
+  useEffect(() => { const box = aiListRef.current; if (box) box.scrollTo({ top: box.scrollHeight, behavior: "smooth" }); }, [aiMsgs]);
 
   const [copied, setCopied] = useState(false);
 
@@ -149,11 +152,7 @@ export default function Clipper() {
 
     const fd = new FormData();
     
-    // ✅ Get user info from Supabase
-    const { data: { user } } = await supabase.auth.getUser();
-    const userId = user?.email || "@ClippedBySal";
-    
-    fd.append("user_id", userId);
+    // The backend saves history under the signed-in account from the session token.
 
     // ✅ If we already generated clips, transcribe the FIRST preview clip
     if (generated.length > 0 && generated[0].preview_url) {
@@ -174,14 +173,16 @@ export default function Clipper() {
 
     const res = await fetch(`${API_BASE}/transcribe`, {
       method: "POST",
+      headers: await sessionHeaders(supabase.auth),
       body: fd
     });
 
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || "Transcription failed");
+    if (!res.ok || !data.ok) throw new Error(data.error || data.detail || "Transcription failed");
 
     setTranscript(data.text || "(no text)");
-    
+    setSegments(Array.isArray(data.segments) ? data.segments : []);
+
     // ✅ Set record ID directly from response
     if (data.record_id) {
       setCurrentRecordId(data.record_id);
@@ -299,14 +300,16 @@ async function transcribeClipByUrl(clipUrl) {
 
     const res = await fetch(`${API_BASE}/transcribe_clip`, {  // <-- NEW ENDPOINT
       method: "POST",
+      headers: await sessionHeaders(supabase.auth),
       body: fd,
     });
 
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || "Clip transcription failed");
+    if (!res.ok || !data.ok) throw new Error(data.error || data.detail || "Clip transcription failed");
 
     setClipMsg("📝 Clip transcript ready (see Transcript panel)");
     setTranscript(data.text || "(no text)");
+    setSegments([]);  // clip times are not source times; Best 3 Moments needs the full video
     setMode("transcribe");
   } catch (e) {
     setError(e.message);
@@ -327,6 +330,7 @@ async function transcribeClipByUrl(clipUrl) {
 
     const res = await fetch(`${API_BASE}/history/update`, {
       method: "POST",
+      headers: await sessionHeaders(supabase.auth),
       body: fd
     });
 
@@ -350,11 +354,12 @@ async function transcribeClipByUrl(clipUrl) {
 
     const res = await fetch(`${API_BASE}/ai_chat`, {
       method: "POST",
+      headers: await sessionHeaders(supabase.auth),
       body: fd
     });
 
     const data = await res.json();
-    if (!res.ok || !data.ok) throw new Error(data.error || "AI helper failed");
+    if (!res.ok || !data.ok) throw new Error(data.error || data.detail || "AI helper failed");
 
     const aiReply = data.reply || "(no reply)";
 
@@ -397,14 +402,15 @@ function tplHashtags() {
 }
   async function tplBestMoments() {
     try {
-      if (!transcript) return setError("Transcribe your video first.");
+      if (!segments.length) return setError("Transcribe the full video first.");
       setAiBusy(true);
-      const fd = new FormData();
-      fd.append("transcript", transcript);
-      fd.append("max_clips", "3");
-      const res = await fetch(`${API_BASE}/auto_clip`, { method: "POST", body: fd });
+      const res = await fetch(`${API_BASE}/auto_clip`, {
+        method: "POST",
+        headers: {...await sessionHeaders(supabase.auth), "Content-Type": "application/json"},
+        body: JSON.stringify({segments, max_clips: 3}),
+      });
       const data = await res.json();
-      if (!res.ok || !data.ok) throw new Error(data.error || "Auto-clip failed");
+      if (!res.ok || !data.ok) throw new Error(data.error || data.detail || "Auto-clip failed");
       if (Array.isArray(data.clips) && data.clips.length) {
         setClips(
           data.clips.slice(0, 5).map(c => ({
@@ -425,14 +431,18 @@ function tplHashtags() {
     }
   }
 
+  // The AI actions, shown once: in the assistant, or in the editor while the assistant is hidden.
+  // Answers appear in the assistant, so an action opens it.
   function TemplateBar() {
+    const run = action => () => { setAiOpen(true); action(); };
+    const secondary = "px-3 py-1.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 disabled:opacity-50";
     return (
       <div className="flex flex-wrap gap-2">
-        <button onClick={tplBestMoments} disabled={aiBusy} className="px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-700 disabled:opacity-50">🎬 Best 3 Moments</button>
-        <button onClick={tplTitles} disabled={aiBusy} className="px-3 py-1.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 disabled:opacity-50">✍️ Viral Titles</button>
-        <button onClick={tplHooks} disabled={aiBusy} className="px-3 py-1.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 disabled:opacity-50">💬 Hooks</button>
-        <button onClick={tplHashtags} disabled={aiBusy} className="px-3 py-1.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 disabled:opacity-50">#️⃣ Hashtags</button>
-        <button onClick={tplSummarize} disabled={aiBusy} className="px-3 py-1.5 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 disabled:opacity-50">📝 Summary</button>
+        <button onClick={run(tplBestMoments)} disabled={aiBusy} className="px-3 py-1.5 rounded bg-blue-600 hover:bg-blue-700 disabled:opacity-50">🎬 Best 3 Moments</button>
+        <button onClick={run(tplTitles)} disabled={aiBusy} className={secondary}>✍️ Viral Titles</button>
+        <button onClick={run(tplHooks)} disabled={aiBusy} className={secondary}>💬 Hooks</button>
+        <button onClick={run(tplHashtags)} disabled={aiBusy} className={secondary}>#️⃣ Hashtags</button>
+        <button onClick={run(tplSummarize)} disabled={aiBusy} className={secondary}>📝 Summary</button>
       </div>
     );
   }
@@ -442,7 +452,7 @@ function tplHashtags() {
     <div className="min-h-screen bg-[#F8FAFC] text-[#172033]">
       {/* Header */}
       <div className="border-b border-slate-200 bg-white/80 backdrop-blur-sm sticky top-0 z-30 shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex flex-wrap gap-3 items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-wrap gap-3 items-center justify-between">
           <div className="flex items-center gap-3">
             <img src={logo} alt="ClipForge AI" className="h-8 w-8" />
             <div className="text-lg font-semibold tracking-wide text-slate-800">ClipForge AI</div>
@@ -491,9 +501,9 @@ function tplHashtags() {
       </div>
 
       {/* Main */}
-      <div className="max-w-7xl mx-auto px-6 py-6 flex gap-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 flex flex-col md:flex-row gap-6">
         {/* LEFT */}
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           {/* Tabs */}
           <div className="flex gap-2 mb-6">
             <button
@@ -531,9 +541,11 @@ function tplHashtags() {
                 <p className="text-xs text-slate-400 mt-1">If a URL is provided, the file picker is ignored.</p>
               </div>
 
-              <div className="mb-4">
-                <TemplateBar />
-              </div>
+              {!aiOpen && (
+                <div className="mb-4">
+                  <TemplateBar />
+                </div>
+              )}
 
               <button
                 onClick={handleTranscribe}
@@ -584,9 +596,11 @@ function tplHashtags() {
                 Add up to 5 clip segments. Clip all at once to get previews (no page change).
               </div>
 
-              <div className="mb-4">
-                <TemplateBar />
-              </div>
+              {!aiOpen && (
+                <div className="mb-4">
+                  <TemplateBar />
+                </div>
+              )}
 
               {/* form for creating sections */}
               {clips.map((c, idx)=>(
@@ -692,7 +706,7 @@ function tplHashtags() {
         </div>
 
         {/* RIGHT: AI assistant */}
-        <div className={`${aiOpen ? "w-full md:w-[32rem]" : "w-0 md:w-0"} overflow-hidden transition-all duration-300`}>
+        <div className={`${aiOpen ? "w-full md:w-[32rem] md:shrink-0" : "hidden md:block md:w-0"} overflow-hidden transition-all duration-300`}>
           <div className="border border-slate-200 bg-white rounded-lg h-full flex flex-col">
             <div className="p-4 border-b border-slate-200 flex items-center justify-between">
               <div className="font-semibold">🤖 ClipForge Assistant</div>
@@ -703,16 +717,10 @@ function tplHashtags() {
             </div>
 
             <div className="p-3 border-b border-slate-200">
-              <div className="flex flex-wrap gap-2">
-                <button onClick={tplBestMoments} disabled={aiBusy} className="px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-sm">🎬 Moments</button>
-                <button onClick={tplTitles}      disabled={aiBusy} className="px-2.5 py-1 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 disabled:opacity-50 text-sm">✍️ Titles</button>
-                <button onClick={tplHooks}       disabled={aiBusy} className="px-2.5 py-1 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 disabled:opacity-50 text-sm">💬 Hooks</button>
-                <button onClick={tplHashtags}    disabled={aiBusy} className="px-2.5 py-1 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 disabled:opacity-50 text-sm">#️⃣ Hashtags</button>
-                <button onClick={tplSummarize}   disabled={aiBusy} className="px-2.5 py-1 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 disabled:opacity-50 text-sm">📝 Summary</button>
-              </div>
+              <TemplateBar />
             </div>
 
-            <div className="flex-1 overflow-auto p-4 space-y-3">
+            <div ref={aiListRef} className="flex-1 overflow-auto p-4 space-y-3 max-h-[60vh] md:max-h-none">
               {aiMsgs.length === 0 && (
                 <div className="text-slate-500 text-sm">
                   Ask for summaries, titles, hooks—or “find the best 3 moments”.
@@ -724,7 +732,6 @@ function tplHashtags() {
                   {m.content}
                 </div>
               ))}
-              <div ref={aiBottomRef} />
             </div>
 
             <div className="p-3 border-t border-slate-200">

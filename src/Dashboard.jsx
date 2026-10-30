@@ -56,18 +56,18 @@ export default function Dashboard() {
     <div className="min-h-screen bg-gradient-to-b from-[#0B1020] via-[#12182B] to-[#1C2450] text-white">
       {/* Header */}
       <div className="border-b border-[#27324A] bg-[#0B1020] sticky top-0 z-30">
-        <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
-          <h1 className="text-lg font-semibold tracking-wide">📋 My History</h1>
-          <div className="flex gap-3 text-sm">
-            <span className="text-white/40">{user?.email}</span>
-            <a href="/clipper" className="bg-[#6C5CE7] hover:bg-[#5A4ED1] px-3 py-1 rounded text-white">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-lg font-semibold tracking-wide whitespace-nowrap">📋 My History</h1>
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <span className="text-white/40 hidden sm:inline">{user?.email}</span>
+            <a href="/clipper" className="bg-[#6C5CE7] hover:bg-[#5A4ED1] px-3 py-1.5 rounded text-white whitespace-nowrap">
               ← Back to Clipper
             </a>
           </div>
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-6 py-8">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
         {records.length === 0 ? (
           <div className="text-center py-20 text-white/40">
             <p className="text-4xl mb-4">🎬</p>

@@ -4,16 +4,17 @@
 <style>
 [hidden]{display:none!important}
 body{font:16px/1.6 system-ui;background:#f3f5fb;color:#17233b;margin:0}main{max-width:1050px;margin:auto;padding:30px}section,article{background:white;border:1px solid #d5dbea;border-radius:12px;padding:22px;margin:18px 0}h1,h2{line-height:1.2}button,a.button{background:#FFFFFF;color:white;border:0;border-radius:7px;padding:10px 15px;cursor:pointer;font:inherit;display:inline-block;text-decoration:none}button:disabled{opacity:.45;cursor:default}label{display:inline-block;margin:8px 15px 8px 0}input,select{font:inherit;padding:8px;max-width:100%;box-sizing:border-box}input[type=number]{width:100px}#transcript{max-height:280px;overflow:auto;line-height:2.2;border:1px solid #cbd5e1;padding:15px;border-radius:8px;user-select:text}#transcript span.selected{background:#c7d2fe}#results{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px}video{width:100%;background:#FFFFFF}#error{color:#b91c1c}.note{background:#e0e7ff;padding:14px;border-radius:8px}.time{color:#667085;font-size:13px;user-select:none}small{display:block}button:focus-visible,a:focus-visible{outline:3px solid #f59e0b;outline-offset:3px}
-</style><link rel="stylesheet" href="/studios/light-theme.css?v=generator-20261026-2"><script defer src="/studios/preview-modal.js"></script>
+</style><link rel="stylesheet" href="/studios/light-theme.css?v=pricing-20261026-1"><script defer src="/studios/preview-modal.js"></script>
 <main>
 <h1>Text-to-Clip</h1>
 <p><a href="/auto" target="_self" class="button">Open AI Auto Clips</a> — full-video splitting, editing and batch exports.</p>
-<p class="note">Word-aligned transcription uses the server's offline faster-whisper engine. Highlight actual source words and preview the timing before clipping. Uploads and clips use your existing account access.</p>
+<p class="note">The ClipForge server transcribes your video word by word. Highlight any words and preview the timing before clipping. Uploads and clips use your existing account access.</p>
 <section>
 <h2>1. Select a source</h2>
 <label>Video file <input id="file" type="file" accept="video/*"></label>
-<button id="load" disabled>Transcribe actual video</button>
-<p>Your actual audio is transcribed with offline models on the ClipForge server. Model word timestamps are estimates; check the source preview when selecting boundaries. No mock transcript is substituted.</p>
+<label>or paste a YouTube / TikTok link <input id="link" type="url" placeholder="https://youtu.be/…" autocomplete="off"></label>
+<button id="load" disabled>Transcribe video</button>
+<p>Word times are estimates from the speech recognition; check the preview before clipping.</p>
 <video id="source" controls preload="metadata" hidden></video>
 </section>
 <section>
@@ -38,16 +39,21 @@ $('source-selection').onclick=()=>{if(!selected)return;const p=Number($('padding
 $('source').ontimeupdate=()=>{if(selectionEnd!==null&&$('source').currentTime>=selectionEnd){$('source').pause();selectionEnd=null}};
 function update(){
   $('file').disabled=busy;
-  $('load').disabled=busy||!file; $('create').disabled=busy||!selected||!video;
+  $('link').disabled=busy;
+  $('load').disabled=busy||(!file&&!$('link').value.trim()); $('create').disabled=busy||!selected||!video;
    $('source-selection').disabled=busy||!video||!selected;
 }
 async function run(label,action){busy=true;update();$('status').textContent=label;$('error').textContent='';try{await action()}catch(e){$('status').textContent='';$('error').textContent=e.message}finally{busy=false;update()}}
 async function request(path,options){const r=await fetch(path,options);let d;try{d=await r.json()}catch{throw Error('Server did not return JSON')}if(!r.ok)throw Error(typeof d.detail==='string'?d.detail:JSON.stringify(d.detail));return d}
-function choose(next){file=next;video=null;selected=null;selectionEnd=null;$('results').replaceChildren();$('transcript').textContent='Load a source to see timestamped words.';$('selection').textContent='No selection';if(sourceUrl)URL.revokeObjectURL(sourceUrl);sourceUrl=URL.createObjectURL(file);$('source').src=sourceUrl;$('source').hidden=false;update()}
+function choose(next){file=next;$('link').value='';video=null;selected=null;selectionEnd=null;$('results').replaceChildren();$('transcript').textContent='Load a source to see timestamped words.';$('selection').textContent='No selection';if(sourceUrl)URL.revokeObjectURL(sourceUrl);sourceUrl=URL.createObjectURL(file);$('source').src=sourceUrl;$('source').hidden=false;update()}
 $('file').onchange=e=>{if(e.target.files[0])choose(e.target.files[0])};
-async function prepare(){if(video)return video;if(!file)throw Error('Choose a video');const fd=new FormData();fd.append('file',file);video=await request('/api/videos',{method:'POST',body:fd});renderWords();return video}
-function renderWords(){const fragment=document.createDocumentFragment();video.words.forEach((w,i)=>{if(i===0||(video.segments||[]).some(segment=>segment.first===i)){const time=document.createElement('small');time.className='time';time.textContent=w.start.toFixed(3)+' seconds';fragment.append(time)}const span=document.createElement('span');span.dataset.word=i;span.textContent=w.word;span.title=w.start.toFixed(3)+' - '+w.end.toFixed(3)+' seconds; confidence '+(w.probability*100).toFixed(0)+'%';fragment.append(span,document.createTextNode(' '))});$('transcript').replaceChildren(fragment)}
-$('load').onclick=()=>run('Transcribing actual audio locally; first run may take a minute...',async()=>{await prepare();$('status').textContent='Real speech transcript ready: faster-whisper '+video.model+'. Verify boundaries with the source preview.'});
+$('link').oninput=()=>{if(file){file=null;$('file').value='';$('source').hidden=true}video=null;selected=null;selectionEnd=null;$('results').replaceChildren();$('transcript').textContent='Load a source to see timestamped words.';$('selection').textContent='No selection';update()};
+async function prepare(){if(video)return video;const link=$('link').value.trim();if(!file&&!link)throw Error('Choose a video or paste a link');
+  if(file){const fd=new FormData();fd.append('file',file);video=await request('/api/videos',{method:'POST',body:fd})}
+  else{video=await request('/api/videos/url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({link})});$('source').src='/api/videos/'+video.video_id+'/source';$('source').hidden=false}
+  renderWords();return video}
+function renderWords(){const fragment=document.createDocumentFragment();video.words.forEach((w,i)=>{if(i===0||(video.segments||[]).some(segment=>segment.first===i)){const time=document.createElement('small');time.className='time';time.textContent=w.start.toFixed(3)+' seconds';fragment.append(time)}const span=document.createElement('span');span.dataset.word=i;span.textContent=w.word;span.title=w.start.toFixed(3)+' - '+w.end.toFixed(3)+' seconds'+(typeof w.probability==='number'?'; confidence '+(w.probability*100).toFixed(0)+'%':'');fragment.append(span,document.createTextNode(' '))});$('transcript').replaceChildren(fragment)}
+$('load').onclick=()=>run('Transcribing your video…',async()=>{await prepare();$('status').textContent='Transcript ready ('+(video.engine==='openai-whisper'?'OpenAI Whisper':'faster-whisper '+video.model)+'). Verify boundaries with the source preview.'});
 function readSelection(){const s=getSelection();if(!s.rangeCount||s.isCollapsed)return;const r=s.getRangeAt(0),root=$('transcript');if(!root.contains(r.startContainer)||!root.contains(r.endContainer))return;const nodes=[...root.querySelectorAll('[data-word]')].filter(node=>{const w=document.createRange();w.selectNodeContents(node);return r.compareBoundaryPoints(Range.END_TO_START,w)<0&&r.compareBoundaryPoints(Range.START_TO_END,w)>0});if(!nodes.length)return;selected={first:Number(nodes[0].dataset.word),last:Number(nodes.at(-1).dataset.word)};root.querySelectorAll('[data-word]').forEach(n=>n.classList.toggle('selected',Number(n.dataset.word)>=selected.first&&Number(n.dataset.word)<=selected.last));showRange();update()}
 $('transcript').onmouseup=readSelection;$('transcript').onkeyup=readSelection;
 function appendClip(c){const article=document.createElement('article'),heading=document.createElement('h3'),player=document.createElement('video'),text=document.createElement('p'),link=document.createElement('a');heading.textContent=c.start.toFixed(2)+' – '+c.end.toFixed(2)+' seconds ('+c.duration_seconds.toFixed(2)+'s)';player.controls=true;player.preload='metadata';player.src=c.preview_url;text.textContent=c.text;link.href=c.download_url;link.textContent='Download clip';link.className='button';link.download='clip.mp4';article.append(heading,player,text,link);$('results').append(article)}
