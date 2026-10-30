@@ -104,8 +104,10 @@ export default function Clipper() {
   const [aiMsgs, setAiMsgs] = useState([]);
   const [aiInput, setAiInput] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
-  const aiBottomRef = useRef(null);
-  useEffect(() => { aiBottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [aiMsgs]);
+  // Scroll only the chat box to the newest message; scrollIntoView also scrolled the page,
+  // which on phones (assistant below the editor) jumped the page down as soon as it opened.
+  const aiListRef = useRef(null);
+  useEffect(() => { const box = aiListRef.current; if (box) box.scrollTo({ top: box.scrollHeight, behavior: "smooth" }); }, [aiMsgs]);
 
   const [copied, setCopied] = useState(false);
 
@@ -446,7 +448,7 @@ function tplHashtags() {
     <div className="min-h-screen bg-[#F8FAFC] text-[#172033]">
       {/* Header */}
       <div className="border-b border-slate-200 bg-white/80 backdrop-blur-sm sticky top-0 z-30 shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex flex-wrap gap-3 items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-wrap gap-3 items-center justify-between">
           <div className="flex items-center gap-3">
             <img src={logo} alt="ClipForge AI" className="h-8 w-8" />
             <div className="text-lg font-semibold tracking-wide text-slate-800">ClipForge AI</div>
@@ -495,9 +497,9 @@ function tplHashtags() {
       </div>
 
       {/* Main */}
-      <div className="max-w-7xl mx-auto px-6 py-6 flex gap-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 flex flex-col md:flex-row gap-6">
         {/* LEFT */}
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           {/* Tabs */}
           <div className="flex gap-2 mb-6">
             <button
@@ -696,7 +698,7 @@ function tplHashtags() {
         </div>
 
         {/* RIGHT: AI assistant */}
-        <div className={`${aiOpen ? "w-full md:w-[32rem]" : "w-0 md:w-0"} overflow-hidden transition-all duration-300`}>
+        <div className={`${aiOpen ? "w-full md:w-[32rem] md:shrink-0" : "hidden md:block md:w-0"} overflow-hidden transition-all duration-300`}>
           <div className="border border-slate-200 bg-white rounded-lg h-full flex flex-col">
             <div className="p-4 border-b border-slate-200 flex items-center justify-between">
               <div className="font-semibold">🤖 ClipForge Assistant</div>
@@ -716,7 +718,7 @@ function tplHashtags() {
               </div>
             </div>
 
-            <div className="flex-1 overflow-auto p-4 space-y-3">
+            <div ref={aiListRef} className="flex-1 overflow-auto p-4 space-y-3 max-h-[60vh] md:max-h-none">
               {aiMsgs.length === 0 && (
                 <div className="text-slate-500 text-sm">
                   Ask for summaries, titles, hooks—or “find the best 3 moments”.
@@ -728,7 +730,6 @@ function tplHashtags() {
                   {m.content}
                 </div>
               ))}
-              <div ref={aiBottomRef} />
             </div>
 
             <div className="p-3 border-t border-slate-200">
