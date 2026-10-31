@@ -72,3 +72,11 @@ test('Thumbnail Creator has AI thumbnails: style gallery with bundled previews, 
  assert.match(script,/× \$\{money\(price\(\)\)\} = \$\{money\(total\(\)\)\}/);  // "3 styles × $0.04 = $0.12"
  for(const slug of ['anime','80s-flashback','comic','collectors-tin','hyperreal-wallpaper'])assert.ok(existsSync(new URL(`../public/studios/thumbnail-styles/${slug}.jpg`,import.meta.url)),slug);
 });
+
+test('AI Video Generator page has Images + Voice -> Video with a review screen (no new tab)',()=>{
+ const script=read('public/studios/slideshow.js'),host=read('public/studios/editor.js'),nav=read('src/StudioNav.jsx');
+ assert.match(host,/import\('\.\/slideshow\.js/);
+ assert.doesNotMatch(nav,/Images \+ Voice|slideshow/i);
+ for(const text of ['Images + Voice → Video','In order (by file name)','AI match (OpenAI vision)','Review before rendering','16:9 (YouTube)','9:16 (TikTok / Reels)','Captions (Auto Clips style)','match-quote','ondrop','ss-handle','ss-player'])assert.ok(script.includes(text),text);
+ assert.match(script,/gaps\.filter\(g => g >= lo && g <= hi\)/);  // boundaries snap to pauses between words
+});
