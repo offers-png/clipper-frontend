@@ -8,6 +8,8 @@ document.querySelector('main').insertBefore(host,document.querySelector('main se
 const style=document.createElement('style');style.textContent='#image-video-panel label:has(textarea){display:block;width:100%}#image-video-panel textarea{display:block;width:100%}#image-video-panel label{max-width:100%}#image-video-panel input{max-width:100%}#editor-progress{accent-color:#235840}#image-video-panel img[hidden]{display:none!important}';document.head.append(style);
 // The Video Editing Workspace below the generator (visual timeline editor).
 const editor=await import('./timeline-editor.js?v=visual-20261031-1');
+// Images + Voice -> Video, right under the AI Video Generator.
+await import('./slideshow.js?v=slides-20261031-1');
 let ivImage=null,ivGenerated=null;
 const api=requestJson;
 const post=body=>({method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
